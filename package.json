@@ -1,0 +1,33 @@
+{
+  "name": "saas-push-giant",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "api:dev": "npm run dev -w @pushgiant/api",
+    "worker:dev": "npm run dev -w @pushgiant/worker",
+    "scheduler:dev": "npm run dev -w @pushgiant/scheduler",
+    "build:platform": "npm run build -w @pushgiant/shared && npm run build -w @pushgiant/api && npm run build -w @pushgiant/worker && npm run build -w @pushgiant/scheduler",
+    "db:migrate:dry": "npm run migrate:dry -w @pushgiant/api"
+  },
+  "dependencies": {
+    "@types/node": "20.11.30",
+    "@types/react": "18.2.67",
+    "@types/react-dom": "18.2.22",
+    "@types/web-push": "3.6.4",
+    "next": "14.2.35",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "typescript": "5.4.5",
+    "web-push": "3.6.7"
+  },
+  "devDependencies": {}
+}

@@ -1,0 +1,1 @@
+Generated Raschini PWA icon assets live in this directory.

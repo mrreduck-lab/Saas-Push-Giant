@@ -1,0 +1,32 @@
+/* Header balance, adaptive controls and Journal parallax correction */
+:root{--header-h:83px}
+
+/* Keep Journal copy anchored to its designed positions. Only media/background parallax remains. */
+.storyCopy.parallaxText,
+.journalGrid .storyCopy,
+.journalGrid .story h3,
+.journalGrid .story p,
+.journalGrid .storyArrow{transform:none!important}
+
+/* About 10% lower header, with balanced controls. */
+.header{min-height:var(--header-h);padding-top:19px!important;padding-bottom:19px!important}
+.headerControl{width:40px!important;height:40px!important}
+.burger span+span{margin-top:5px!important}
+
+/* Adaptive contrast only over hero video. Logo remains untouched and gold. */
+.headerHero .burger,
+.headerHero .cartLink{color:#fff;mix-blend-mode:difference!important;isolation:auto}
+.headerHero .burger span,
+.headerHero .cartLink svg{mix-blend-mode:inherit!important}
+.headerCompact .burger,
+.headerCompact .cartLink,
+.menuIsOpen .burger,
+.menuIsOpen .cartLink{mix-blend-mode:normal!important}
+
+@media(max-width:900px){
+  :root{--header-h:79px}
+  .header{padding-top:calc(env(safe-area-inset-top) + 9px)!important;padding-bottom:9px!important}
+  .headerCompact{padding-top:calc(env(safe-area-inset-top) + 8px)!important;padding-bottom:8px!important}
+  .headerControl{width:40px!important;height:40px!important}
+  .burger span+span{margin-top:5px!important}
+}

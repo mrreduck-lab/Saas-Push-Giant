@@ -1,0 +1,13 @@
+/* Главная без параллакса: все медиа, фоны и текст остаются в исходной композиции. */
+.parallaxMedia,
+.parallaxBg,
+.parallaxText {
+  transform: none !important;
+  will-change: auto !important;
+}
+
+[data-parallax-section] {
+  --p-media: 0px !important;
+  --p-bg: 0px !important;
+  --p-text: 0px !important;
+}

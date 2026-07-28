@@ -1,0 +1,153 @@
+import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import Fastify from "fastify";
+import { randomUUID } from "node:crypto";
+import { campaignCreateSchema, subscriptionUpsertSchema } from "@pushgiant/shared";
+import type { ApiConfig } from "./config.js";
+import type { Database } from "./db.js";
+import type { Queues } from "./queues.js";
+import { createCampaign, markCampaignQueued, upsertSubscription } from "./repositories.js";
+
+type ServerDeps = {
+  config: ApiConfig;
+  database: Database;
+  queues: Queues;
+};
+
+export function buildServer({ config, database, queues }: ServerDeps) {
+  const app = Fastify({
+    logger: {
+      level: process.env.LOG_LEVEL ?? "info"
+    },
+    genReqId: (request) =>
+      request.headers["x-request-id"]?.toString() ?? randomUUID()
+  });
+
+  app.register(helmet);
+  app.register(cors, {
+    origin: config.corsOrigins,
+    credentials: true
+  });
+
+  app.get("/healthz", async () => ({ status: "ok" }));
+
+  app.get("/readyz", async (_request, reply) => {
+    const [databaseReady, redisReady] = await Promise.all([
+      database.health().catch(() => false),
+      queues.connection.ping().then((result) => result === "PONG").catch(() => false)
+    ]);
+
+    if (!databaseReady || !redisReady) {
+      return reply.code(503).send({
+        status: "not_ready",
+        dependencies: { database: databaseReady, redis: redisReady }
+      });
+    }
+
+    return {
+      status: "ready",
+      dependencies: { database: true, redis: true }
+    };
+  });
+
+  app.get("/v1/projects/:projectId/config", async (request, reply) => {
+    const { projectId } = request.params as { projectId: string };
+    const result = await database.pool.query(
+      `
+        select
+          p.id,
+          p.name,
+          pc.name as pwa_name,
+          pc.short_name,
+          pc.theme_color,
+          pc.background_color,
+          pc.start_url,
+          pc.scope,
+          vc.public_key
+        from projects p
+        left join pwa_configs pc on pc.project_id = p.id
+        left join vapid_credentials vc on vc.project_id = p.id
+        where p.id = $1 and p.status = 'active'
+        limit 1
+      `,
+      [projectId]
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      return reply.code(404).send({ error: "project_not_found" });
+    }
+
+    return {
+      projectId: row.id,
+      name: row.name,
+      publicKey: row.public_key,
+      pwa: {
+        name: row.pwa_name,
+        shortName: row.short_name,
+        themeColor: row.theme_color,
+        backgroundColor: row.background_color,
+        startUrl: row.start_url,
+        scope: row.scope
+      }
+    };
+  });
+
+  app.post("/v1/subscriptions/upsert", async (request, reply) => {
+    const parsed = subscriptionUpsertSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid_subscription", details: parsed.error.flatten() });
+    }
+
+    const subscription = await upsertSubscription(database.pool, parsed.data);
+    if (!subscription) {
+      return reply.code(404).send({ error: "project_not_found" });
+    }
+
+    return reply.code(202).send({
+      status: "accepted",
+      project_id: parsed.data.project_id,
+      subscription
+    });
+  });
+
+  app.post("/v1/campaigns", async (request, reply) => {
+    const parsed = campaignCreateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid_campaign", details: parsed.error.flatten() });
+    }
+
+    const campaign = await createCampaign(database.pool, parsed.data);
+    if (!campaign) {
+      return reply.code(404).send({ error: "project_not_found" });
+    }
+
+    return reply.code(201).send({
+      id: campaign.id,
+      status: campaign.status,
+      project_id: campaign.project_id
+    });
+  });
+
+  app.post("/v1/campaigns/:campaignId/send-now", async (request, reply) => {
+    const { campaignId } = request.params as { campaignId: string };
+    const campaign = await markCampaignQueued(database.pool, campaignId);
+    if (!campaign) {
+      return reply.code(404).send({ error: "campaign_not_found_or_not_queueable" });
+    }
+
+    await queues.campaignDelivery.add(
+      "campaign.send",
+      {
+        campaignId,
+        projectId: campaign.project_id,
+        organizationId: campaign.organization_id
+      },
+      { jobId: `campaign:${campaignId}` }
+    );
+
+    return reply.code(202).send({ id: campaignId, status: campaign.status });
+  });
+
+  return app;
+}

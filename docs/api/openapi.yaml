@@ -1,0 +1,209 @@
+openapi: 3.1.0
+info:
+  title: Saas Push Giant API
+  version: 0.1.0
+  description: Draft API contract for the PWA and Web Push platform.
+servers:
+  - url: https://api.push.example.com
+paths:
+  /healthz:
+    get:
+      summary: Liveness check
+      responses:
+        "200":
+          description: Service is alive
+  /readyz:
+    get:
+      summary: Readiness check
+      responses:
+        "200":
+          description: Dependencies are ready
+        "503":
+          description: A required dependency is unavailable
+  /v1/projects/{projectId}/config:
+    get:
+      summary: Load public project config
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Public project config
+  /v1/projects/{projectId}/vapid-public-key:
+    get:
+      summary: Load public VAPID key
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Public VAPID key
+  /v1/subscriptions/upsert:
+    post:
+      summary: Create or update a push subscription
+      security:
+        - ProjectPublicKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionUpsert"
+      responses:
+        "200":
+          description: Subscription was upserted
+        "400":
+          description: Invalid subscription payload
+  /v1/subscriptions:
+    delete:
+      summary: Disable a push subscription
+      security:
+        - ProjectPublicKey: []
+      responses:
+        "204":
+          description: Subscription disabled
+  /v1/subscriptions/heartbeat:
+    post:
+      summary: Refresh subscription state and last_seen_at
+      security:
+        - ProjectPublicKey: []
+      responses:
+        "200":
+          description: Heartbeat accepted
+  /v1/events:
+    post:
+      summary: Record SDK event
+      security:
+        - ProjectPublicKey: []
+      responses:
+        "202":
+          description: Event accepted
+  /v1/geo/update:
+    post:
+      summary: Save explicit last-known geo position
+      security:
+        - ProjectPublicKey: []
+      responses:
+        "200":
+          description: Geo position updated
+  /v1/campaigns:
+    post:
+      summary: Create campaign draft
+      security:
+        - AdminSession: []
+        - ServerApiKey: []
+      responses:
+        "201":
+          description: Campaign created
+  /v1/campaigns/{campaignId}/send-now:
+    post:
+      summary: Queue campaign for immediate sending
+      security:
+        - AdminSession: []
+        - ServerApiKey: []
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+      responses:
+        "202":
+          description: Campaign queued
+  /v1/campaigns/{campaignId}/schedule:
+    post:
+      summary: Schedule campaign
+      security:
+        - AdminSession: []
+        - ServerApiKey: []
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+      responses:
+        "202":
+          description: Campaign scheduled
+  /v1/campaigns/{campaignId}/stats:
+    get:
+      summary: Get campaign stats
+      security:
+        - AdminSession: []
+        - ServerApiKey: []
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+      responses:
+        "200":
+          description: Campaign stats
+  /v1/webhooks/mindbox/push:
+    post:
+      summary: Signed Mindbox custom action webhook
+      security:
+        - WebhookSignature: []
+      responses:
+        "202":
+          description: Webhook accepted
+components:
+  securitySchemes:
+    ProjectPublicKey:
+      type: apiKey
+      in: header
+      name: X-PushGiant-Project-Key
+    ServerApiKey:
+      type: http
+      scheme: bearer
+    AdminSession:
+      type: apiKey
+      in: cookie
+      name: pushgiant_session
+    WebhookSignature:
+      type: apiKey
+      in: header
+      name: X-PushGiant-Signature
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CampaignId:
+      name: campaignId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    SubscriptionUpsert:
+      type: object
+      required:
+        - project_id
+        - endpoint
+        - keys
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        subscriber_id:
+          type: string
+          format: uuid
+        anonymous_id:
+          type: string
+        external_customer_id:
+          type: string
+        endpoint:
+          type: string
+          format: uri
+        keys:
+          type: object
+          required:
+            - p256dh
+            - auth
+          properties:
+            p256dh:
+              type: string
+            auth:
+              type: string
+        content_encoding:
+          type: string
+        platform:
+          type: string
+        browser:
+          type: string
+        locale:
+          type: string
+        timezone:
+          type: string
