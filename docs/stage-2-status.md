@@ -43,6 +43,8 @@
 
 - `npm install --cache /tmp/npm-cache-pushgiant`
 - `npm run build:platform`
+- `npm run db:migrate:dry`
+- `npm run build`
 
 ## Still To Implement
 
