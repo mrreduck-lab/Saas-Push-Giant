@@ -31,6 +31,7 @@ paths:
   /v1/projects/{projectId}/vapid-public-key:
     get:
       summary: Load public VAPID key
+      deprecated: true
       parameters:
         - $ref: "#/components/parameters/ProjectId"
       responses:
@@ -39,8 +40,6 @@ paths:
   /v1/subscriptions/upsert:
     post:
       summary: Create or update a push subscription
-      security:
-        - ProjectPublicKey: []
       requestBody:
         required: true
         content:
@@ -48,7 +47,7 @@ paths:
             schema:
               $ref: "#/components/schemas/SubscriptionUpsert"
       responses:
-        "200":
+        "202":
           description: Subscription was upserted
         "400":
           description: Invalid subscription payload
@@ -87,23 +86,33 @@ paths:
   /v1/campaigns:
     post:
       summary: Create campaign draft
+      description: Requires `campaigns:write` scope. If `scheduled_at` is set, the scheduler will queue the campaign when due.
       security:
-        - AdminSession: []
         - ServerApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignCreate"
       responses:
         "201":
           description: Campaign created
+        "401":
+          description: Missing, invalid, or insufficient API key
   /v1/campaigns/{campaignId}/send-now:
     post:
       summary: Queue campaign for immediate sending
+      description: Requires `campaigns:send` scope.
       security:
-        - AdminSession: []
         - ServerApiKey: []
       parameters:
         - $ref: "#/components/parameters/CampaignId"
       responses:
         "202":
           description: Campaign queued
+        "401":
+          description: Missing, invalid, or insufficient API key
   /v1/campaigns/{campaignId}/schedule:
     post:
       summary: Schedule campaign
@@ -141,8 +150,9 @@ components:
       in: header
       name: X-PushGiant-Project-Key
     ServerApiKey:
-      type: http
-      scheme: bearer
+      type: apiKey
+      in: header
+      name: x-api-key
     AdminSession:
       type: apiKey
       in: cookie
@@ -207,3 +217,44 @@ components:
           type: string
         timezone:
           type: string
+    CampaignCreate:
+      type: object
+      required:
+        - project_id
+        - title
+        - body
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        body:
+          type: string
+          minLength: 1
+          maxLength: 240
+        url:
+          type: string
+          format: uri
+        image_asset_id:
+          type: string
+          format: uuid
+        ttl_seconds:
+          type: integer
+          minimum: 1
+          maximum: 2419200
+        urgency:
+          type: string
+          enum:
+            - very-low
+            - low
+            - normal
+            - high
+        topic:
+          type: string
+          maxLength: 32
+        scheduled_at:
+          type: string
+          format: date-time

@@ -58,7 +58,20 @@ The first product foundation scaffold now lives in:
 - `packages/shared` - shared schemas and TypeScript types.
 - `migrations` - PostgreSQL schema migrations.
 
-Current status is tracked in [docs/stage-1-status.md](docs/stage-1-status.md).
+Stage 1 status is tracked in [docs/stage-1-status.md](docs/stage-1-status.md).
+
+## Stage 2 Delivery Core
+
+The second product layer adds:
+
+- API-key auth for campaign creation and send-now.
+- Project/organization scoped API-key checks.
+- AES-GCM envelope encryption for stored push endpoint/key material.
+- Delivery worker with `web-push`, batch records, delivery attempts, and `404/410` subscription disable handling.
+- Scheduler polling for due scheduled campaigns.
+- Deploy workflow migration step before service startup.
+
+Stage 2 status is tracked in [docs/stage-2-status.md](docs/stage-2-status.md).
 
 ## Development Rules
 

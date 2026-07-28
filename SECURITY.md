@@ -31,6 +31,22 @@ For Russian clients, production personal data should be hosted on Russian infras
 - Single shared admin token.
 - Single Redis set for all subscriptions.
 - No tenant isolation.
-- No API key hashing/rotation.
 - No queue, audit log, or campaign-level permission model.
 - Next.js version needs security upgrade.
+
+## Stage 2 Controls Implemented
+
+- API keys are hashed at rest with a prefix lookup.
+- Campaign creation and send-now enforce scoped API keys.
+- Campaign API keys are organization/project scoped.
+- Subscription endpoint, `p256dh`, `auth`, and VAPID private key values use AES-256-GCM envelopes.
+- Delivery worker records attempts and disables dead subscriptions on provider `404`/`410`.
+
+## Remaining Security Work
+
+- Add key creation, rotation, and revocation endpoints/UI.
+- Add project public token or domain/origin verification for SDK subscription upsert.
+- Add rate limits to SDK and admin/API endpoints.
+- Add admin sessions, CSRF protection, and RBAC enforcement.
+- Add audit log writes for campaign and key operations.
+- Replace or isolate the imported Next demo/admin shell to close residual Next/PostCSS audit findings.

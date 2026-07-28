@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import type { Pool } from "pg";
-import type { CampaignCreate, SubscriptionUpsert } from "@pushgiant/shared";
+import { apiKeyPrefix, hashSecret } from "@pushgiant/shared";
+import type { CampaignCreate, DataCipher, SubscriptionUpsert } from "@pushgiant/shared";
 
 export type ProjectIdentity = {
   id: string;
@@ -12,6 +12,13 @@ export type CampaignIdentity = {
   organization_id: string;
   project_id: string;
   status: string;
+};
+
+export type ApiKeyIdentity = {
+  id: string;
+  organization_id: string;
+  project_id: string | null;
+  scopes: string[];
 };
 
 export async function findActiveProject(pool: Pool, projectId: string): Promise<ProjectIdentity | null> {
@@ -28,15 +35,48 @@ export async function findActiveProject(pool: Pool, projectId: string): Promise<
   return result.rows[0] ?? null;
 }
 
+async function findActiveProjectForApiKey(
+  pool: Pool,
+  projectId: string,
+  apiKey: ApiKeyIdentity
+): Promise<ProjectIdentity | null> {
+  const result = await pool.query<ProjectIdentity>(
+    `
+      select id, organization_id
+      from projects
+      where id = $1
+        and organization_id = $2
+        and ($3::uuid is null or id = $3)
+        and status = 'active'
+      limit 1
+    `,
+    [projectId, apiKey.organization_id, apiKey.project_id]
+  );
+
+  return result.rows[0] ?? null;
+}
+
 export function hashEndpoint(endpoint: string): string {
-  return createHash("sha256").update(endpoint).digest("hex");
+  return hashSecret(endpoint);
 }
 
-function developmentEnvelope(value: string): string {
-  return Buffer.from(value, "utf8").toString("base64");
+export async function authenticateApiKey(pool: Pool, apiKey: string): Promise<ApiKeyIdentity | null> {
+  const result = await pool.query<ApiKeyIdentity>(
+    `
+      update api_keys
+      set last_used_at = now()
+      where prefix = $1
+        and key_hash = $2
+        and revoked_at is null
+      returning id, organization_id, project_id, scopes
+    `,
+    [apiKeyPrefix(apiKey), hashSecret(apiKey)]
+  );
+
+  return result.rows[0] ?? null;
 }
 
-export async function upsertSubscription(pool: Pool, payload: SubscriptionUpsert) {
+export async function upsertSubscription(pool: Pool, cipher: DataCipher, payload: SubscriptionUpsert) {
   const project = await findActiveProject(pool, payload.project_id);
   if (!project) {
     return null;
@@ -90,9 +130,9 @@ export async function upsertSubscription(pool: Pool, payload: SubscriptionUpsert
       project.id,
       subscriberId,
       endpointHash,
-      developmentEnvelope(payload.endpoint),
-      developmentEnvelope(payload.keys.p256dh),
-      developmentEnvelope(payload.keys.auth),
+      cipher.encrypt(payload.endpoint),
+      cipher.encrypt(payload.keys.p256dh),
+      cipher.encrypt(payload.keys.auth),
       payload.content_encoding ?? null,
       payload.platform ?? null,
       payload.browser ?? null,
@@ -150,8 +190,8 @@ async function upsertSubscriber(pool: Pool, project: ProjectIdentity, payload: S
   return result.rows[0]?.id ?? null;
 }
 
-export async function createCampaign(pool: Pool, payload: CampaignCreate) {
-  const project = await findActiveProject(pool, payload.project_id);
+export async function createCampaign(pool: Pool, apiKey: ApiKeyIdentity, payload: CampaignCreate) {
+  const project = await findActiveProjectForApiKey(pool, payload.project_id, apiKey);
   if (!project) {
     return null;
   }
@@ -192,15 +232,22 @@ export async function createCampaign(pool: Pool, payload: CampaignCreate) {
   return result.rows[0] ?? null;
 }
 
-export async function markCampaignQueued(pool: Pool, campaignId: string): Promise<CampaignIdentity | null> {
+export async function markCampaignQueued(
+  pool: Pool,
+  apiKey: ApiKeyIdentity,
+  campaignId: string
+): Promise<CampaignIdentity | null> {
   const result = await pool.query<CampaignIdentity>(
     `
       update campaigns
       set status = 'queued', queued_at = now(), updated_at = now()
-      where id = $1 and status in ('draft', 'scheduled', 'failed')
+      where id = $1
+        and organization_id = $2
+        and ($3::uuid is null or project_id = $3)
+        and status in ('draft', 'scheduled', 'failed')
       returning id, organization_id, project_id, status
     `,
-    [campaignId]
+    [campaignId, apiKey.organization_id, apiKey.project_id]
   );
 
   return result.rows[0] ?? null;

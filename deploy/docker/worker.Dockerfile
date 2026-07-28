@@ -9,7 +9,8 @@ COPY packages/shared/package.json packages/shared/package.json
 RUN npm ci --workspaces --include-workspace-root
 
 COPY tsconfig.platform.json ./
+COPY packages/shared packages/shared
 COPY apps/worker apps/worker
-RUN npm run build -w @pushgiant/worker
+RUN npm run build -w @pushgiant/shared && npm run build -w @pushgiant/worker
 
 CMD ["npm", "run", "start", "-w", "@pushgiant/worker"]

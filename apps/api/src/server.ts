@@ -1,12 +1,19 @@
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import Fastify from "fastify";
+import type { FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
-import { campaignCreateSchema, subscriptionUpsertSchema } from "@pushgiant/shared";
+import { campaignCreateSchema, createDataCipher, subscriptionUpsertSchema } from "@pushgiant/shared";
 import type { ApiConfig } from "./config.js";
 import type { Database } from "./db.js";
 import type { Queues } from "./queues.js";
-import { createCampaign, markCampaignQueued, upsertSubscription } from "./repositories.js";
+import {
+  authenticateApiKey,
+  createCampaign,
+  markCampaignQueued,
+  upsertSubscription
+} from "./repositories.js";
+import type { ApiKeyIdentity } from "./repositories.js";
 
 type ServerDeps = {
   config: ApiConfig;
@@ -15,6 +22,7 @@ type ServerDeps = {
 };
 
 export function buildServer({ config, database, queues }: ServerDeps) {
+  const cipher = createDataCipher(config.dataEncryptionKey);
   const app = Fastify({
     logger: {
       level: process.env.LOG_LEVEL ?? "info"
@@ -99,7 +107,7 @@ export function buildServer({ config, database, queues }: ServerDeps) {
       return reply.code(400).send({ error: "invalid_subscription", details: parsed.error.flatten() });
     }
 
-    const subscription = await upsertSubscription(database.pool, parsed.data);
+    const subscription = await upsertSubscription(database.pool, cipher, parsed.data);
     if (!subscription) {
       return reply.code(404).send({ error: "project_not_found" });
     }
@@ -112,12 +120,17 @@ export function buildServer({ config, database, queues }: ServerDeps) {
   });
 
   app.post("/v1/campaigns", async (request, reply) => {
+    const apiKey = await requireApiKey(request, database, ["campaigns:write"]);
+    if (!apiKey) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+
     const parsed = campaignCreateSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "invalid_campaign", details: parsed.error.flatten() });
     }
 
-    const campaign = await createCampaign(database.pool, parsed.data);
+    const campaign = await createCampaign(database.pool, apiKey, parsed.data);
     if (!campaign) {
       return reply.code(404).send({ error: "project_not_found" });
     }
@@ -130,8 +143,13 @@ export function buildServer({ config, database, queues }: ServerDeps) {
   });
 
   app.post("/v1/campaigns/:campaignId/send-now", async (request, reply) => {
+    const apiKey = await requireApiKey(request, database, ["campaigns:send"]);
+    if (!apiKey) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+
     const { campaignId } = request.params as { campaignId: string };
-    const campaign = await markCampaignQueued(database.pool, campaignId);
+    const campaign = await markCampaignQueued(database.pool, apiKey, campaignId);
     if (!campaign) {
       return reply.code(404).send({ error: "campaign_not_found_or_not_queueable" });
     }
@@ -150,4 +168,40 @@ export function buildServer({ config, database, queues }: ServerDeps) {
   });
 
   return app;
+}
+
+async function requireApiKey(
+  request: FastifyRequest,
+  database: Database,
+  requiredScopes: string[]
+): Promise<ApiKeyIdentity | null> {
+  const value = readApiKey(request);
+  if (!value) {
+    return null;
+  }
+
+  const apiKey = await authenticateApiKey(database.pool, value);
+  if (!apiKey) {
+    return null;
+  }
+
+  if (!requiredScopes.every((scope) => apiKey.scopes.includes(scope))) {
+    return null;
+  }
+
+  return apiKey;
+}
+
+function readApiKey(request: FastifyRequest): string | null {
+  const headerValue = request.headers["x-api-key"];
+  if (typeof headerValue === "string" && headerValue.trim()) {
+    return headerValue.trim();
+  }
+
+  const authorization = request.headers.authorization;
+  if (authorization?.startsWith("Bearer ")) {
+    return authorization.slice("Bearer ".length).trim();
+  }
+
+  return null;
 }

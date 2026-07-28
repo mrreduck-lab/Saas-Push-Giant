@@ -2,12 +2,23 @@
 
 All write endpoints must require either a project public key, server API key, admin session, or signed webhook depending on the caller.
 
+Implemented Stage 2 server API keys are accepted as either:
+
+- `Authorization: Bearer <api-key>`
+- `x-api-key: <api-key>`
+
+Current scopes:
+
+| Scope | Allows |
+| --- | --- |
+| `campaigns:write` | Create draft/scheduled campaigns |
+| `campaigns:send` | Queue a campaign for immediate delivery |
+
 ## SDK/Public
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/v1/projects/:projectId/config` | Load public project config |
-| `GET` | `/v1/projects/:projectId/vapid-public-key` | Load public VAPID key |
 | `POST` | `/v1/subscriptions/upsert` | Create/update subscription by `endpoint_hash` |
 | `DELETE` | `/v1/subscriptions` | Disable a subscription |
 | `POST` | `/v1/subscriptions/heartbeat` | Update `last_seen_at`, permission, browser state |
@@ -26,7 +37,6 @@ All write endpoints must require either a project public key, server API key, ad
 | `POST` | `/v1/projects/:id/vapid/rotate` | Rotate VAPID keys |
 | `POST` | `/v1/assets` | Upload icon/image asset |
 | `POST` | `/v1/campaigns` | Create draft campaign |
-| `POST` | `/v1/campaigns/:id/schedule` | Schedule campaign |
 | `POST` | `/v1/campaigns/:id/send-now` | Queue immediate campaign |
 | `POST` | `/v1/campaigns/:id/cancel` | Cancel campaign |
 | `GET` | `/v1/campaigns/:id/stats` | Campaign accepted/failed/retried/clicked stats |
@@ -48,3 +58,16 @@ All write endpoints must require either a project public key, server API key, ad
 | `GET` | `/healthz` | Liveness |
 | `GET` | `/readyz` | Readiness: database and Redis |
 | `GET` | `/metrics` | Internal metrics endpoint |
+
+## Stage 2 Implemented
+
+| Method | Path | Auth | Status |
+| --- | --- | --- | --- |
+| `GET` | `/healthz` | Public | Implemented |
+| `GET` | `/readyz` | Public | Implemented |
+| `GET` | `/v1/projects/:projectId/config` | Public | Implemented |
+| `POST` | `/v1/subscriptions/upsert` | Public SDK payload | Implemented |
+| `POST` | `/v1/campaigns` | API key with `campaigns:write` | Implemented |
+| `POST` | `/v1/campaigns/:campaignId/send-now` | API key with `campaigns:send` | Implemented |
+
+`scheduled_at` on `POST /v1/campaigns` creates a scheduled campaign. The scheduler queues due campaigns automatically.

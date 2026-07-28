@@ -30,4 +30,6 @@ jobs:
             git checkout main
             git reset --hard origin/main
             docker compose -f deploy/docker-compose.target.yml pull || true
+            docker compose -f deploy/docker-compose.target.yml up -d postgres redis
+            docker compose -f deploy/docker-compose.target.yml run --rm push-api npm run migrate -w @pushgiant/api
             docker compose -f deploy/docker-compose.target.yml up -d --build

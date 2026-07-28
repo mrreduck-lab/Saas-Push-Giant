@@ -22,11 +22,7 @@
 
 ## Still To Implement
 
-- API-key validation and project-scoped auth.
-- Real encryption/key management for stored subscription endpoint/key material.
-- Batch creation and delivery attempts.
-- Web Push provider adapter and fake provider for tests.
-- Scheduler polling of due campaigns.
-- Migration execution inside deploy flow.
 - Docker clean-install test on a machine with Docker available.
 - Residual `npm audit` high findings remain for Next/PostCSS; resolving them likely requires a Next major upgrade or replacing the imported demo/admin shell.
+
+The removed items moved into Stage 2 and are tracked in [stage-2-status.md](stage-2-status.md).

@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+
+export const CAMPAIGN_DELIVERY_QUEUE_NAME = "campaign-delivery";
+export const DEFAULT_CAMPAIGN_BATCH_SIZE = 500;
 
 export const campaignStatusSchema = z.enum([
   "draft",
@@ -63,6 +67,75 @@ export const campaignCreateSchema = z.object({
 });
 
 export type CampaignCreate = z.infer<typeof campaignCreateSchema>;
+
+export type DataCipher = {
+  encrypt(value: string): string;
+  decrypt(envelope: string): string;
+};
+
+export function hashSecret(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+export function apiKeyPrefix(value: string): string {
+  return value.slice(0, 16);
+}
+
+export function createDataCipher(rawKey?: string): DataCipher {
+  const key = resolveEncryptionKey(rawKey);
+
+  return {
+    encrypt(value: string) {
+      const iv = randomBytes(12);
+      const cipher = createCipheriv("aes-256-gcm", key, iv);
+      const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+      const tag = cipher.getAuthTag();
+
+      return [
+        "v1",
+        iv.toString("base64url"),
+        tag.toString("base64url"),
+        encrypted.toString("base64url")
+      ].join(":");
+    },
+    decrypt(envelope: string) {
+      if (!envelope.startsWith("v1:")) {
+        return Buffer.from(envelope, "base64").toString("utf8");
+      }
+
+      const [, ivText, tagText, encryptedText] = envelope.split(":");
+      if (!ivText || !tagText || !encryptedText) {
+        throw new Error("Invalid encrypted envelope");
+      }
+
+      const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(ivText, "base64url"));
+      decipher.setAuthTag(Buffer.from(tagText, "base64url"));
+      const decrypted = Buffer.concat([
+        decipher.update(Buffer.from(encryptedText, "base64url")),
+        decipher.final()
+      ]);
+
+      return decrypted.toString("utf8");
+    }
+  };
+}
+
+function resolveEncryptionKey(rawKey?: string): Buffer {
+  if (!rawKey) {
+    return createHash("sha256").update("pushgiant-development-data-key").digest();
+  }
+
+  if (/^[a-f0-9]{64}$/i.test(rawKey)) {
+    return Buffer.from(rawKey, "hex");
+  }
+
+  const decoded = Buffer.from(rawKey, "base64");
+  if (decoded.length === 32) {
+    return decoded;
+  }
+
+  return createHash("sha256").update(rawKey).digest();
+}
 
 export function requireEnv(name: string): string {
   const value = process.env[name];

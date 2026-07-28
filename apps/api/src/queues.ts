@@ -1,7 +1,6 @@
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
-
-export const CAMPAIGN_QUEUE_NAME = "campaign-delivery";
+import { CAMPAIGN_DELIVERY_QUEUE_NAME } from "@pushgiant/shared";
 
 export type Queues = {
   connection: Redis;
@@ -18,7 +17,7 @@ export function createQueues(redisUrl: string): Queues {
     maxRetriesPerRequest: null
   };
 
-  const campaignDelivery = new Queue(CAMPAIGN_QUEUE_NAME, {
+  const campaignDelivery = new Queue(CAMPAIGN_DELIVERY_QUEUE_NAME, {
     connection: queueConnection,
     defaultJobOptions: {
       attempts: 5,
