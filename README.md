@@ -34,7 +34,7 @@ NPM_CONFIG_CACHE=/tmp/npm-cache npm run build
 
 Result: production build passes.
 
-Important warning: current `next@14.2.5` is deprecated and has a security advisory. Upgrading Next.js is an early hardening task.
+Important warning: Next.js has been upgraded to `14.2.35`, but `npm audit` still reports a high-severity advisory in the Next/PostCSS chain. The next hardening decision is either a Next major upgrade or isolating/replacing the imported demo admin surface.
 
 ## Product Direction
 
