@@ -1,0 +1,2 @@
+Temporary bootstrap commit for initial GitHub API import.
+The next commit replaces this tree with the product repository contents.
