@@ -38,6 +38,7 @@ export const subscriptionUpsertSchema = z.object({
   subscriber_id: z.string().uuid().optional(),
   anonymous_id: z.string().min(1).optional(),
   external_customer_id: z.string().min(1).optional(),
+  external_source: z.string().min(1).max(64).optional(),
   endpoint: z.string().url(),
   keys: z.object({
     p256dh: z.string().min(1),
@@ -53,6 +54,48 @@ export const subscriptionUpsertSchema = z.object({
 });
 
 export type SubscriptionUpsert = z.infer<typeof subscriptionUpsertSchema>;
+
+export const subscriberHeartbeatSchema = z.object({
+  project_id: z.string().uuid(),
+  subscriber_id: z.string().uuid().optional(),
+  anonymous_id: z.string().min(1).optional(),
+  external_customer_id: z.string().min(1).optional(),
+  endpoint: z.string().url().optional(),
+  permission: z.enum(["default", "granted", "denied"]).optional(),
+  platform: z.string().optional(),
+  browser: z.string().optional(),
+  os: z.string().optional(),
+  user_agent: z.string().optional(),
+  locale: z.string().optional(),
+  timezone: z.string().optional()
+});
+
+export type SubscriberHeartbeat = z.infer<typeof subscriberHeartbeatSchema>;
+
+export const eventTrackSchema = z.object({
+  project_id: z.string().uuid(),
+  subscriber_id: z.string().uuid().optional(),
+  anonymous_id: z.string().min(1).optional(),
+  external_customer_id: z.string().min(1).optional(),
+  campaign_id: z.string().uuid().optional(),
+  type: z.string().min(1).max(80),
+  payload: z.record(z.unknown()).optional()
+});
+
+export type EventTrack = z.infer<typeof eventTrackSchema>;
+
+export const geoUpdateSchema = z.object({
+  project_id: z.string().uuid(),
+  subscriber_id: z.string().uuid().optional(),
+  anonymous_id: z.string().min(1).optional(),
+  external_customer_id: z.string().min(1).optional(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  accuracy: z.number().nonnegative().optional(),
+  consent_version: z.string().min(1).max(64).optional()
+});
+
+export type GeoUpdate = z.infer<typeof geoUpdateSchema>;
 
 export const campaignCreateSchema = z.object({
   project_id: z.string().uuid(),

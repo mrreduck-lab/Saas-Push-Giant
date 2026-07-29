@@ -3,14 +3,26 @@ import helmet from "@fastify/helmet";
 import Fastify from "fastify";
 import type { FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
-import { campaignCreateSchema, createDataCipher, subscriptionUpsertSchema } from "@pushgiant/shared";
+import {
+  campaignCreateSchema,
+  createDataCipher,
+  eventTrackSchema,
+  geoUpdateSchema,
+  subscriberHeartbeatSchema,
+  subscriptionUpsertSchema
+} from "@pushgiant/shared";
 import type { ApiConfig } from "./config.js";
 import type { Database } from "./db.js";
 import type { Queues } from "./queues.js";
 import {
   authenticateApiKey,
   createCampaign,
+  getProjectOverview,
+  listProjectSubscribers,
   markCampaignQueued,
+  recordEvent,
+  recordHeartbeat,
+  updateSubscriberGeo,
   upsertSubscription
 } from "./repositories.js";
 import type { ApiKeyIdentity } from "./repositories.js";
@@ -117,6 +129,85 @@ export function buildServer({ config, database, queues }: ServerDeps) {
       project_id: parsed.data.project_id,
       subscription
     });
+  });
+
+  app.post("/v1/subscribers/heartbeat", async (request, reply) => {
+    const parsed = subscriberHeartbeatSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid_heartbeat", details: parsed.error.flatten() });
+    }
+
+    const result = await recordHeartbeat(database.pool, parsed.data);
+    if (!result) {
+      return reply.code(404).send({ error: "project_not_found" });
+    }
+
+    return reply.code(202).send({ status: "accepted", ...result });
+  });
+
+  app.post("/v1/events/track", async (request, reply) => {
+    const parsed = eventTrackSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid_event", details: parsed.error.flatten() });
+    }
+
+    const result = await recordEvent(database.pool, parsed.data);
+    if (!result) {
+      return reply.code(404).send({ error: "project_not_found" });
+    }
+
+    return reply.code(202).send({ status: "accepted", ...result });
+  });
+
+  app.post("/v1/subscribers/geo", async (request, reply) => {
+    const parsed = geoUpdateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid_geo", details: parsed.error.flatten() });
+    }
+
+    const result = await updateSubscriberGeo(database.pool, parsed.data);
+    if (!result) {
+      return reply.code(404).send({ error: "project_or_subscriber_not_found" });
+    }
+
+    return reply.code(202).send({ status: "accepted", ...result });
+  });
+
+  app.get("/v1/projects/:projectId/overview", async (request, reply) => {
+    const apiKey = await requireApiKey(request, database, ["analytics:read"]);
+    if (!apiKey) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+
+    const { projectId } = request.params as { projectId: string };
+    const overview = await getProjectOverview(database.pool, apiKey, projectId);
+    if (!overview) {
+      return reply.code(404).send({ error: "project_not_found" });
+    }
+
+    return overview;
+  });
+
+  app.get("/v1/projects/:projectId/subscribers", async (request, reply) => {
+    const apiKey = await requireApiKey(request, database, ["subscribers:read"]);
+    if (!apiKey) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+
+    const { projectId } = request.params as { projectId: string };
+    const { limit } = request.query as { limit?: string };
+    const parsedLimit = limit ? Number(limit) : 100;
+    const subscribers = await listProjectSubscribers(
+      database.pool,
+      apiKey,
+      projectId,
+      Number.isFinite(parsedLimit) ? parsedLimit : 100
+    );
+    if (!subscribers) {
+      return reply.code(404).send({ error: "project_not_found" });
+    }
+
+    return { subscribers };
   });
 
   app.post("/v1/campaigns", async (request, reply) => {

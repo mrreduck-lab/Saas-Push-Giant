@@ -81,7 +81,7 @@ services:
     environment:
       POSTGRES_DB: pushgiant
       POSTGRES_USER: pushgiant
-      POSTGRES_PASSWORD: pushgiant
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pushgiant}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pushgiant -d pushgiant"]
       interval: 10s

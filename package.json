@@ -15,7 +15,7 @@
     "api:dev": "npm run dev -w @pushgiant/api",
     "worker:dev": "npm run dev -w @pushgiant/worker",
     "scheduler:dev": "npm run dev -w @pushgiant/scheduler",
-    "build:platform": "npm run build -w @pushgiant/shared && npm run build -w @pushgiant/api && npm run build -w @pushgiant/worker && npm run build -w @pushgiant/scheduler",
+    "build:platform": "npm run build -w @pushgiant/shared && npm run build -w @pushgiant/sdk && npm run build -w @pushgiant/api && npm run build -w @pushgiant/worker && npm run build -w @pushgiant/scheduler",
     "db:migrate:dry": "npm run migrate:dry -w @pushgiant/api"
   },
   "dependencies": {

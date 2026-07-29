@@ -105,6 +105,9 @@ async function deliverCampaign(job: CampaignJob) {
   }
 
   await finishBatch(batchId, sent, failed);
+  if (sent > 0) {
+    await consumeTrialPushes(campaign.organization_id, sent);
+  }
   const status = failed === 0 ? "completed" : sent > 0 ? "partially_failed" : "failed";
   await finishCampaign(campaign.id, status);
 
@@ -208,7 +211,12 @@ async function sendToSubscription(
     await pool.query(
       `
         update push_subscriptions
-        set failure_count = 0, last_failure_at = null, updated_at = now()
+        set
+          failure_count = 0,
+          last_failure_at = null,
+          last_success_at = now(),
+          last_confirmed_at = now(),
+          updated_at = now()
         where id = $1
       `,
       [subscription.id]
@@ -296,6 +304,17 @@ async function finishCampaign(campaignId: string, status: "completed" | "partial
       where id = $1
     `,
     [campaignId, status]
+  );
+}
+
+async function consumeTrialPushes(organizationId: string, sent: number) {
+  await pool.query(
+    `
+      update organizations
+      set trial_push_sent = trial_push_sent + $2, updated_at = now()
+      where id = $1
+    `,
+    [organizationId, sent]
   );
 }
 

@@ -6,6 +6,7 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/worker/package.json apps/worker/package.json
 COPY apps/scheduler/package.json apps/scheduler/package.json
 COPY packages/shared/package.json packages/shared/package.json
+COPY packages/sdk/package.json packages/sdk/package.json
 COPY app app
 COPY lib lib
 COPY public public

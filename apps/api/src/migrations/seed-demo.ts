@@ -12,9 +12,23 @@ const domainId = "33333333-3333-4333-8333-333333333333";
 
 await pool.query(
   `
-    insert into organizations (id, name, status, plan)
-    values ($1, 'Raschini Demo', 'active', 'demo')
-    on conflict (id) do update set name = excluded.name, updated_at = now()
+    insert into organizations (
+      id,
+      name,
+      status,
+      plan,
+      trial_started_at,
+      trial_ends_at,
+      trial_push_limit
+    )
+    values ($1, 'Raschini Demo', 'active', 'trial', now(), now() + interval '14 days', 100)
+    on conflict (id) do update set
+      name = excluded.name,
+      plan = excluded.plan,
+      trial_started_at = coalesce(organizations.trial_started_at, excluded.trial_started_at),
+      trial_ends_at = coalesce(organizations.trial_ends_at, excluded.trial_ends_at),
+      trial_push_limit = excluded.trial_push_limit,
+      updated_at = now()
   `,
   [organizationId]
 );
@@ -105,8 +119,37 @@ await pool.query(
     projectId,
     apiKeyPrefix(demoApiKey),
     hashSecret(demoApiKey),
-    ["campaigns:write", "campaigns:send"]
+    ["campaigns:write", "campaigns:send", "analytics:read", "subscribers:read"]
   ]
+);
+
+await pool.query(
+  `
+    insert into segments (organization_id, project_id, name, description, definition_json)
+    values
+      ($1, $2, 'All active subscribers', 'Default pilot audience', '{"subscription_status":"active"}'::jsonb),
+      ($1, $2, 'Raschini trial testers', 'Manual test group for the WordPress pilot', '{"tag":"pilot"}'::jsonb)
+    on conflict (project_id, name) do update set
+      description = excluded.description,
+      definition_json = excluded.definition_json,
+      updated_at = now()
+  `,
+  [organizationId, projectId]
+);
+
+await pool.query(
+  `
+    insert into integration_connections (organization_id, project_id, kind, name, status, config_json)
+    values
+      ($1, $2, 'wordpress', 'Raschini WordPress', 'pending', '{"plugin":"pushgiant"}'::jsonb),
+      ($1, $2, 'universal_js', 'Universal JS SDK', 'pending', '{}'::jsonb)
+    on conflict (project_id, kind) do update set
+      name = excluded.name,
+      status = excluded.status,
+      config_json = excluded.config_json,
+      updated_at = now()
+  `,
+  [organizationId, projectId]
 );
 
 await pool.end();

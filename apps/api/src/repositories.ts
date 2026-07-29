@@ -1,6 +1,13 @@
 import type { Pool } from "pg";
 import { apiKeyPrefix, hashSecret } from "@pushgiant/shared";
-import type { CampaignCreate, DataCipher, SubscriptionUpsert } from "@pushgiant/shared";
+import type {
+  CampaignCreate,
+  DataCipher,
+  EventTrack,
+  GeoUpdate,
+  SubscriberHeartbeat,
+  SubscriptionUpsert
+} from "@pushgiant/shared";
 
 export type ProjectIdentity = {
   id: string;
@@ -19,6 +26,13 @@ export type ApiKeyIdentity = {
   organization_id: string;
   project_id: string | null;
   scopes: string[];
+};
+
+type SubscriberIdentityPayload = {
+  subscriber_id?: string;
+  anonymous_id?: string;
+  external_customer_id?: string;
+  external_source?: string;
 };
 
 export async function findActiveProject(pool: Pool, projectId: string): Promise<ProjectIdentity | null> {
@@ -147,21 +161,53 @@ export async function upsertSubscription(pool: Pool, cipher: DataCipher, payload
 }
 
 async function upsertSubscriber(pool: Pool, project: ProjectIdentity, payload: SubscriptionUpsert): Promise<string | null> {
+  return upsertSubscriberIdentity(pool, project, payload);
+}
+
+async function upsertSubscriberIdentity(
+  pool: Pool,
+  project: ProjectIdentity,
+  payload: SubscriberIdentityPayload
+): Promise<string | null> {
   if (payload.subscriber_id) {
+    await pool.query(
+      `
+        update subscribers
+        set last_seen_at = now(), updated_at = now()
+        where id = $1 and project_id = $2
+      `,
+      [payload.subscriber_id, project.id]
+    );
     return payload.subscriber_id;
   }
 
   if (payload.external_customer_id) {
     const result = await pool.query<{ id: string }>(
       `
-        insert into subscribers (organization_id, project_id, external_customer_id, anonymous_id, updated_at)
-        values ($1, $2, $3, $4, now())
+        insert into subscribers (
+          organization_id,
+          project_id,
+          external_customer_id,
+          anonymous_id,
+          external_source,
+          last_seen_at,
+          updated_at
+        )
+        values ($1, $2, $3, $4, $5, now(), now())
         on conflict (project_id, external_customer_id) do update set
           anonymous_id = coalesce(excluded.anonymous_id, subscribers.anonymous_id),
+          external_source = coalesce(excluded.external_source, subscribers.external_source),
+          last_seen_at = now(),
           updated_at = now()
         returning id
       `,
-      [project.organization_id, project.id, payload.external_customer_id, payload.anonymous_id ?? null]
+      [
+        project.organization_id,
+        project.id,
+        payload.external_customer_id,
+        payload.anonymous_id ?? null,
+        payload.external_source ?? null
+      ]
     );
     return result.rows[0]?.id ?? null;
   }
@@ -169,12 +215,15 @@ async function upsertSubscriber(pool: Pool, project: ProjectIdentity, payload: S
   if (payload.anonymous_id) {
     const result = await pool.query<{ id: string }>(
       `
-        insert into subscribers (organization_id, project_id, anonymous_id, updated_at)
-        values ($1, $2, $3, now())
-        on conflict (project_id, anonymous_id) do update set updated_at = now()
+        insert into subscribers (organization_id, project_id, anonymous_id, external_source, last_seen_at, updated_at)
+        values ($1, $2, $3, $4, now(), now())
+        on conflict (project_id, anonymous_id) do update set
+          external_source = coalesce(excluded.external_source, subscribers.external_source),
+          last_seen_at = now(),
+          updated_at = now()
         returning id
       `,
-      [project.organization_id, project.id, payload.anonymous_id]
+      [project.organization_id, project.id, payload.anonymous_id, payload.external_source ?? null]
     );
     return result.rows[0]?.id ?? null;
   }
@@ -188,6 +237,192 @@ async function upsertSubscriber(pool: Pool, project: ProjectIdentity, payload: S
     [project.organization_id, project.id]
   );
   return result.rows[0]?.id ?? null;
+}
+
+export async function recordHeartbeat(pool: Pool, payload: SubscriberHeartbeat) {
+  const project = await findActiveProject(pool, payload.project_id);
+  if (!project) {
+    return null;
+  }
+
+  const subscriberId = await upsertSubscriberIdentity(pool, project, payload);
+  if (payload.endpoint) {
+    await pool.query(
+      `
+        update push_subscriptions
+        set
+          permission = coalesce($3, permission),
+          platform = coalesce($4, platform),
+          browser = coalesce($5, browser),
+          os = coalesce($6, os),
+          user_agent = coalesce($7, user_agent),
+          locale = coalesce($8, locale),
+          timezone = coalesce($9, timezone),
+          last_seen_at = now(),
+          last_confirmed_at = now(),
+          updated_at = now()
+        where project_id = $1 and endpoint_hash = $2
+      `,
+      [
+        project.id,
+        hashEndpoint(payload.endpoint),
+        payload.permission ?? null,
+        payload.platform ?? null,
+        payload.browser ?? null,
+        payload.os ?? null,
+        payload.user_agent ?? null,
+        payload.locale ?? null,
+        payload.timezone ?? null
+      ]
+    );
+  }
+
+  return { subscriber_id: subscriberId, project_id: project.id };
+}
+
+export async function recordEvent(pool: Pool, payload: EventTrack) {
+  const project = await findActiveProject(pool, payload.project_id);
+  if (!project) {
+    return null;
+  }
+
+  const subscriberId = await upsertSubscriberIdentity(pool, project, payload);
+  const result = await pool.query<{ id: string }>(
+    `
+      insert into events (
+        organization_id,
+        project_id,
+        subscriber_id,
+        campaign_id,
+        type,
+        payload_json
+      )
+      values ($1, $2, $3, $4, $5, $6::jsonb)
+      returning id
+    `,
+    [
+      project.organization_id,
+      project.id,
+      subscriberId,
+      payload.campaign_id ?? null,
+      payload.type,
+      JSON.stringify(payload.payload ?? {})
+    ]
+  );
+
+  return { id: result.rows[0].id, subscriber_id: subscriberId };
+}
+
+export async function updateSubscriberGeo(pool: Pool, payload: GeoUpdate) {
+  const project = await findActiveProject(pool, payload.project_id);
+  if (!project) {
+    return null;
+  }
+
+  const subscriberId = await upsertSubscriberIdentity(pool, project, payload);
+  if (!subscriberId) {
+    return null;
+  }
+
+  await pool.query(
+    `
+      update subscribers
+      set
+        latitude = $3,
+        longitude = $4,
+        accuracy = $5,
+        geo_updated_at = now(),
+        last_seen_at = now(),
+        updated_at = now()
+      where id = $1 and project_id = $2
+    `,
+    [subscriberId, project.id, payload.latitude, payload.longitude, payload.accuracy ?? null]
+  );
+
+  if (payload.consent_version) {
+    await pool.query(
+      `
+        insert into geo_consents (subscriber_id, organization_id, project_id, consent_version, status, updated_at)
+        values ($1, $2, $3, $4, 'granted', now())
+        on conflict (subscriber_id) do update set
+          consent_version = excluded.consent_version,
+          status = excluded.status,
+          updated_at = now()
+      `,
+      [subscriberId, project.organization_id, project.id, payload.consent_version]
+    );
+  }
+
+  return { subscriber_id: subscriberId };
+}
+
+export async function getProjectOverview(pool: Pool, apiKey: ApiKeyIdentity, projectId: string) {
+  const project = await findActiveProjectForApiKey(pool, projectId, apiKey);
+  if (!project) {
+    return null;
+  }
+
+  const result = await pool.query(
+    `
+      select
+        (select count(*)::int from subscribers where project_id = $1) as subscribers,
+        (select count(*)::int from push_subscriptions where project_id = $1 and status = 'active') as active_devices,
+        (select count(*)::int from subscribers where project_id = $1 and created_at >= now() - interval '1 day') as new_subscriptions,
+        (select count(*)::int from delivery_attempts where project_id = $1 and status = 'sent') as sent_pushes,
+        (select count(*)::int from events where project_id = $1 and type = 'push.open') as opens,
+        (select status from domains where project_id = $1 order by verified_at desc nulls last, created_at desc limit 1) as site_status
+    `,
+    [project.id]
+  );
+
+  return result.rows[0];
+}
+
+export async function listProjectSubscribers(
+  pool: Pool,
+  apiKey: ApiKeyIdentity,
+  projectId: string,
+  limit = 100
+) {
+  const project = await findActiveProjectForApiKey(pool, projectId, apiKey);
+  if (!project) {
+    return null;
+  }
+
+  const result = await pool.query(
+    `
+      select
+        s.id,
+        s.anonymous_id,
+        s.external_customer_id,
+        s.external_source,
+        s.status,
+        s.created_at,
+        s.last_seen_at,
+        ps.id as subscription_id,
+        ps.platform,
+        ps.browser,
+        ps.os,
+        ps.permission,
+        ps.status as subscription_status,
+        ps.last_success_at,
+        ps.last_seen_at as subscription_last_seen_at
+      from subscribers s
+      left join lateral (
+        select *
+        from push_subscriptions ps
+        where ps.subscriber_id = s.id
+        order by ps.last_seen_at desc
+        limit 1
+      ) ps on true
+      where s.project_id = $1
+      order by s.last_seen_at desc
+      limit $2
+    `,
+    [project.id, Math.min(Math.max(limit, 1), 500)]
+  );
+
+  return result.rows;
 }
 
 export async function createCampaign(pool: Pool, apiKey: ApiKeyIdentity, payload: CampaignCreate) {
