@@ -1,4 +1,4 @@
-name: Deploy
+name: Deploy production
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
       - main
 
 concurrency:
-  group: production
+  group: pushgiant-production
   cancel-in-progress: false
 
 jobs:
@@ -23,13 +23,37 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
           script_stop: true
+          command_timeout: 30m
           script: |
             set -euo pipefail
-            cd "${{ secrets.DEPLOY_PATH }}"
-            git fetch origin main
+
+            APP_DIR="${{ secrets.DEPLOY_PATH }}"
+            COMPOSE="docker compose -p pushgiant -f deploy/docker-compose.target.yml"
+
+            cd "$APP_DIR"
+            git fetch --prune origin main
             git checkout main
             git reset --hard origin/main
-            docker compose -f deploy/docker-compose.target.yml pull || true
-            docker compose -f deploy/docker-compose.target.yml up -d postgres redis
-            docker compose -f deploy/docker-compose.target.yml run --rm push-api npm run migrate -w @pushgiant/api
-            docker compose -f deploy/docker-compose.target.yml up -d --build
+
+            test -f .env
+            $COMPOSE config --quiet
+            $COMPOSE pull postgres redis
+            $COMPOSE up -d postgres redis
+            $COMPOSE build admin push-api push-worker push-scheduler
+            $COMPOSE run --rm push-api npm run migrate -w @pushgiant/api
+            $COMPOSE up -d --remove-orphans
+
+            for attempt in $(seq 1 30); do
+              if curl --fail --silent --show-error http://127.0.0.1:3101/ >/dev/null; then
+                break
+              fi
+              if [ "$attempt" -eq 30 ]; then
+                $COMPOSE ps
+                $COMPOSE logs --tail=200 admin push-api
+                exit 1
+              fi
+              sleep 2
+            done
+
+            $COMPOSE ps
+            docker image prune -f
