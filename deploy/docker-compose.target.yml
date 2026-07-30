@@ -1,13 +1,6 @@
-services:
-  reverse-proxy:
-    image: caddy:2
-    depends_on:
-      - push-api
-      - admin
-    ports:
-      - "80:80"
-      - "443:443"
+name: pushgiant
 
+services:
   admin:
     build:
       context: ..
@@ -15,7 +8,11 @@ services:
     env_file:
       - ../.env
     depends_on:
-      - push-api
+      push-api:
+        condition: service_started
+    ports:
+      - "127.0.0.1:3101:3000"
+    restart: unless-stopped
 
   push-api:
     build:
@@ -24,8 +21,13 @@ services:
     env_file:
       - ../.env
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3100:3100"
+    restart: unless-stopped
 
   push-worker:
     build:
@@ -34,8 +36,11 @@ services:
     env_file:
       - ../.env
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
   push-scheduler:
     build:
@@ -44,8 +49,11 @@ services:
     env_file:
       - ../.env
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
   postgres:
     image: postgres:16
@@ -55,13 +63,27 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pushgiant -d pushgiant"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
 
   redis:
     image: redis:7
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
 
 volumes:
   postgres-data:
+    name: pushgiant_postgres_data
   redis-data:
+    name: pushgiant_redis_data
