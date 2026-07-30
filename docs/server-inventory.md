@@ -1,8 +1,8 @@
 # Beget Server Inventory and Push Giant Placement
 
-Last verified: 2026-07-30 08:27 MSK
+Last verified: 2026-07-30 08:39 MSK
 
-This document records the current state of the shared Beget VPS and the placement rules for Push Giant. It is based on a read-only server inventory executed under `root` on 2026-07-30.
+This document records the current state of the shared Beget VPS and the placement rules for Push Giant. It is based on read-only server inventory executed under `root` on 2026-07-30.
 
 ## Server
 
@@ -27,7 +27,47 @@ The server currently uses a mixed runtime model:
 - systemd for Calories AI Diary and Vuzbuz;
 - PM2 for AGI Media Engine;
 - system PostgreSQL 16;
-- Docker is installed but currently has no application containers, volumes, or Compose projects.
+- Docker 29.1.3 is installed but currently has no application containers, volumes, or Compose projects.
+
+## Filesystem Layout
+
+Observed application layout:
+
+```text
+/srv/apps/
+├── agi-media-engine/
+│   ├── current -> one release under releases/
+│   ├── releases/
+│   └── shared/
+├── calories/
+│   ├── current -> one release under releases/
+│   ├── releases/
+│   └── shared/
+└── vuzbuz/
+    ├── current -> one release under releases/
+    ├── releases/
+    └── shared/
+```
+
+Ownership of all three application directories:
+
+```text
+user:  deploy
+group: deploy
+mode:  drwxr-x---
+```
+
+Observed disk usage:
+
+| Path | Approximate size |
+|---|---:|
+| `/srv/apps/calories` | 2.7 GB |
+| `/srv/apps/agi-media-engine` | 777 MB |
+| `/srv/apps/vuzbuz` | 400 MB |
+| `/srv/apps` total | 3.8 GB |
+| `/srv/backups` | 1.7 MB |
+
+The existing products use immutable release directories and a `current` symlink. New deployments should preserve this operational pattern unless Docker Compose fully owns the product lifecycle.
 
 ## Current Products
 
@@ -35,47 +75,92 @@ The server currently uses a mixed runtime model:
 
 | Parameter | Value |
 |---|---|
+| Application directory | `/srv/apps/calories` |
+| Current runtime path | `/srv/apps/calories/current` |
+| Active release during inspection | `/srv/apps/calories/releases/e4d2cefedf57d66fd4fb31a1be4b3439f965514b` |
 | systemd unit | `calories-ai-diary.service` |
-| Status during inspection | active, running |
+| Runtime user/group | `deploy:deploy` |
+| Working directory | `/srv/apps/calories/current` |
+| Start command | `/usr/bin/npm start` |
+| Runtime | Next.js server v15.5.20 |
 | Local port | `127.0.0.1:3001` |
 | Public domains | `caloriesdiary.com`, `www.caloriesdiary.com` |
 | Reverse proxy | system Nginx -> `http://127.0.0.1:3001` |
+| Restart policy | `Restart=always`, `RestartSec=3` |
+
+Systemd hardening currently includes `NoNewPrivileges=true` and `PrivateTmp=true`.
 
 ### Vuzbuz
 
 | Parameter | Value |
 |---|---|
+| Application directory | `/srv/apps/vuzbuz` |
+| Current runtime path | `/srv/apps/vuzbuz/current` |
+| Active release during inspection | `/srv/apps/vuzbuz/releases/2bdf38839c6c85c327ddf52c3a8a52c4eb7abc77` |
 | systemd unit | `vuzbuz.service` |
-| Status during inspection | active, running |
+| Runtime user/group | `deploy:deploy` |
+| Working directory | `/srv/apps/vuzbuz/current` |
+| Start command | `/usr/bin/npm run preview -- --host 127.0.0.1 --port 3000` |
+| Runtime | Vite preview server |
 | Local port | `127.0.0.1:3000` |
 | Public domains | `vuzbuz.ru`, `www.vuzbuz.ru` |
 | Reverse proxy | system Nginx -> `http://127.0.0.1:3000` |
+| Restart policy | `Restart=always`, `RestartSec=3` |
+
+Systemd hardening currently includes `NoNewPrivileges=true` and `PrivateTmp=true`.
 
 ### AGI Media Engine
 
 | Parameter | Value |
 |---|---|
+| Application directory | `/srv/apps/agi-media-engine` |
+| Current runtime path | `/srv/apps/agi-media-engine/current` |
+| Release layout | multiple timestamped releases under `/srv/apps/agi-media-engine/releases` |
+| Active process manager | PM2 |
 | PM2 process | `agi-media-engine` |
+| PM2 owner | `root` |
+| PM2 home | `/root/.pm2` |
+| PM2 working directory | `/srv/apps/agi-media-engine/current` |
+| PM2 command | `/usr/bin/npm start` |
+| Node.js version | 20.20.2 |
 | Status during inspection | online |
-| Memory during inspection | about 64 MB |
+| Uptime during inspection | about 3 days |
+| Memory during first inspection | about 64 MB |
+| Public port/domain | none identified |
 | Legacy systemd unit | `agi-media-engine.service` exists but is disabled |
-| Public port/domain | not identified in the first inventory pass |
+
+The disabled systemd unit is configured to run as `deploy:deploy` from `/srv/apps/agi-media-engine/current`, while the active PM2 process is owned by `root`. This is an inconsistency and should not be copied into Push Giant. Push Giant processes must not be managed by root-level PM2.
 
 ## Shared Server Services
 
 ### Nginx
 
-System Nginx listens publicly on:
+System Nginx listens publicly on ports 80 and 443.
 
-- `0.0.0.0:80` and `[::]:80`;
-- `0.0.0.0:443` and `[::]:443`.
-
-Known reverse-proxy mappings:
+Known mappings:
 
 ```text
 caloriesdiary.com  -> 127.0.0.1:3001
 vuzbuz.ru          -> 127.0.0.1:3000
 ```
+
+Configuration files:
+
+```text
+/etc/nginx/sites-available/caloriesdiary.com
+/etc/nginx/sites-enabled/caloriesdiary.com
+/etc/nginx/sites-available/vuzbuz
+/etc/nginx/sites-enabled/vuzbuz
+```
+
+TLS files are stored manually under:
+
+```text
+/etc/nginx/tls/caloriesdiary.com/
+/etc/nginx/tls/vuzbuz.ru/
+```
+
+Certbot was not installed during inspection. Certificate issuance and renewal automation are not yet documented and must be verified before adding Push Giant domains.
 
 ### PostgreSQL
 
@@ -85,11 +170,17 @@ System PostgreSQL 16 is active and listens only on:
 127.0.0.1:5432
 ```
 
-Push Giant must not share a database, database user, schema, credentials, or backup path with another product.
+The only non-template database detected during inspection was:
+
+```text
+postgres
+```
+
+No application database was found in the system PostgreSQL instance. Push Giant will not use this shared PostgreSQL service. It will receive its own PostgreSQL container, database, credentials, volume, backup, and restore procedure.
 
 ### Docker
 
-Installed version during inspection:
+Installed version:
 
 ```text
 Docker 29.1.3
@@ -97,13 +188,12 @@ Docker 29.1.3
 
 At the time of inspection there were:
 
-- no running containers;
-- no stopped application containers;
+- no running or stopped application containers;
 - no Docker Compose projects;
-- no Docker volumes;
+- no named Docker volumes;
 - only the default `bridge`, `host`, and `none` networks.
 
-This makes Push Giant a suitable first isolated Docker Compose application on this server.
+Push Giant can therefore become the first isolated Docker Compose application on this server without colliding with an existing Compose project.
 
 ## Current Listening Ports
 
@@ -112,32 +202,31 @@ This makes Push Giant a suitable first isolated Docker Compose application on th
 | 22 | public | SSH |
 | 80 | public | Nginx HTTP |
 | 443 | public | Nginx HTTPS |
-| 3000 | local/application | Vuzbuz |
-| 3001 | local/application | Calories AI Diary |
+| 3000 | `127.0.0.1` | Vuzbuz |
+| 3001 | application binding | Calories AI Diary |
 | 5432 | `127.0.0.1` | system PostgreSQL 16 |
 
-Ports for Push Giant must be chosen outside the existing application bindings.
-
-Proposed local bindings:
+Planned local bindings for Push Giant:
 
 ```text
 127.0.0.1:3100  Push Giant API
 127.0.0.1:3101  Push Giant web/dashboard
 ```
 
-These are planned values and must be rechecked immediately before deployment.
+These ports must be rechecked immediately before deployment.
 
-## Existing Filesystem
+## Deployment User
 
-Observed top-level usage:
+A dedicated Unix user exists:
 
 ```text
-/srv/apps      about 3.8 GB
-/srv/backups   about 1.7 MB
-/var/www/html  about 8 KB
+user:  deploy
+uid:   1000
+home:  /home/deploy
+shell: /bin/bash
 ```
 
-The exact release/current directory layout of existing applications had not yet been captured in the first inventory pass. It must be documented before changing shared deployment tooling.
+Calories and Vuzbuz systemd services run as `deploy`. Push Giant deployment automation should also operate through a restricted non-root deployment identity. Root should be limited to host-level administration.
 
 ## Product Isolation Policy
 
@@ -159,17 +248,7 @@ Each product must have:
 12. no shared application secrets;
 13. a documented migration procedure to a clean server.
 
-Shared host-level components may be limited to:
-
-- Linux;
-- SSH;
-- firewall;
-- Docker Engine;
-- system Nginx or another reverse proxy;
-- host monitoring;
-- certificate automation.
-
-Product data services must not be treated as shared infrastructure unless a specific architecture decision explicitly allows it.
+Shared host-level components may be limited to Linux, SSH, firewall, Docker Engine, system Nginx, host monitoring, and certificate automation.
 
 ## Push Giant Target Placement
 
@@ -179,19 +258,19 @@ Planned server structure:
 
 ```text
 /srv/apps/pushgiant/
-├── repo/
+├── current -> release or repo checkout
+├── releases/
 ├── shared/
 │   └── .env
 ├── backups/
 │   ├── postgres/
 │   └── redis/
 ├── logs/
-├── scripts/
-│   ├── deploy.sh
-│   ├── backup.sh
-│   ├── restore.sh
-│   └── healthcheck.sh
-└── current -> repo
+└── scripts/
+    ├── deploy.sh
+    ├── backup.sh
+    ├── restore.sh
+    └── healthcheck.sh
 ```
 
 Planned Compose services:
@@ -232,7 +311,7 @@ The complete Push Giant product must be restorable on a new server using:
 
 1. a fresh clone of this repository;
 2. the production environment file transferred through a secure channel;
-3. a PostgreSQL backup;
+3. a logical PostgreSQL backup;
 4. required Redis persistence only if needed by the queue recovery policy;
 5. Docker Engine and Docker Compose;
 6. `docker compose up -d` after database restoration;
@@ -251,22 +330,25 @@ pg_restore -d pushgiant pushgiant.dump
 
 Docker volume snapshots may be used as an additional recovery method, but they must not be the only documented migration mechanism.
 
-## Items Still to Verify
+## Risks and Findings
 
-Before deployment, capture and document:
+1. AGI Media Engine is currently managed by root-level PM2 despite having a disabled non-root systemd unit. This should be corrected in the AGI project, not during Push Giant deployment.
+2. Certificate renewal automation is unknown because Certbot is absent and TLS files are manually referenced from `/etc/nginx/tls`.
+3. No application-level backup timers or root cron jobs were detected.
+4. Existing release directories include full `node_modules` trees and consume most of `/srv/apps`; release retention must be controlled.
+5. The server reports that a restart is required after operating-system updates.
 
-- actual directory tree below `/srv/apps`;
-- systemd unit contents for Calories AI Diary and Vuzbuz;
-- current release/current symlink conventions;
-- deploy users and SSH restrictions;
-- GitHub Actions patterns used by existing products;
-- exact AGI Media Engine working directory and runtime path;
-- existing PostgreSQL databases and ownership without exposing secrets;
-- SSL certificate management method, because Certbot was not found in the first inspection;
+## Items Still to Verify Before Push Giant Deployment
+
+- exact `current` symlink target for AGI Media Engine;
+- GitHub Actions deployment scripts and release retention rules used by current products;
 - firewall configuration;
-- available ports immediately before Push Giant launch;
-- backup jobs and external backup destination.
+- TLS issuance and renewal mechanism;
+- external backup destination;
+- exact free ports immediately before launch;
+- memory and disk limits for each Push Giant container;
+- rollback procedure for the first production deployment.
 
 ## Change Safety
 
-No existing product service, Nginx virtual host, PostgreSQL database, port binding, or deployment path may be modified as part of Push Giant deployment until the remaining inventory is complete and a rollback procedure is documented.
+No existing product service, Nginx virtual host, PostgreSQL database, port binding, TLS file, deployment path, or process manager may be modified as part of Push Giant deployment without an explicit rollback procedure.
