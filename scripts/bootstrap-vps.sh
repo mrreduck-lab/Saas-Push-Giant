@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-APP_DIR="${1:-/srv/apps/saas-push-giant}"
+APP_DIR="${1:-/srv/apps/pushgiant}"
 REPO_URL="${REPO_URL:-https://github.com/mrreduck-lab/Saas-Push-Giant.git}"
 
 mkdir -p "$APP_DIR"

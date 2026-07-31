@@ -5,7 +5,7 @@ Deployment target:
 - one Docker package for SaaS and on-premise;
 - PostgreSQL as durable database;
 - Redis/BullMQ for queues;
-- Caddy or Nginx reverse proxy;
+- host Nginx reverse proxy;
 - backup and restore scripts;
 - health and readiness checks.
 
@@ -28,7 +28,7 @@ Set repository variable `DEPLOY_ENABLED=true` only after the server folder and `
 Recommended layout:
 
 ```text
-/srv/apps/saas-push-giant/
+/srv/apps/pushgiant/
   repo or current checkout
   .env
 ```
