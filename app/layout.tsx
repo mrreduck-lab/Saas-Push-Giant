@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Cormorant_Garamond, Manrope } from 'next/font/google';
 import PushPrompt from './components/PushPrompt';
 import './globals.css';
+import './pushgiant-critical.css';
 import './overrides.css';
 import './no-parallax.css';
 
@@ -20,8 +21,8 @@ const sans = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: 'Raschini — Сила спокойствия',
-  description: 'Неаполитанское портновское искусство и современный стиль Raschini.',
+  title: 'Push Giant',
+  description: 'PWA, web push and install flows for pilot commerce projects.',
   manifest: '/manifest.json',
   icons: {
     icon: [
@@ -32,13 +33,13 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'Raschini',
+    statusBarStyle: 'default',
+    title: 'Push Giant',
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#090806',
+  themeColor: '#f6f3ee',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,

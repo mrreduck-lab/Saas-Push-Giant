@@ -1,12 +1,12 @@
 {
-  "name": "Raschini",
-  "short_name": "Raschini",
-  "description": "Raschini luxury mobile experience",
+  "name": "Push Giant",
+  "short_name": "Push Giant",
+  "description": "PWA and web push platform for pilot commerce projects",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0d0b09",
+  "background_color": "#f6f3ee",
+  "theme_color": "#f6f3ee",
   "icons": [
     {
       "src": "/icons/icon-192.png",
