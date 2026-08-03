@@ -21,7 +21,7 @@ Required for `.github/workflows/deploy.yml`:
 - `DEPLOY_PATH`
 - `DEPLOY_PORT` optional, defaults to `22`
 
-Set repository variable `DEPLOY_ENABLED=true` only after the server folder and `.env` are ready.
+Set repository variable `DEPLOY_ENABLED=true` only after the server folder and shared `.env` are ready.
 
 ## Server Folder
 
@@ -29,18 +29,22 @@ Recommended layout:
 
 ```text
 /srv/apps/pushgiant/
-  repo or current checkout
-  .env
+  repo/
+  .env -> /srv/apps/pushgiant/shared/.env
+  shared/
+    .env
 ```
 
-`DEPLOY_PATH` should point to the checkout folder that contains `package.json` and `deploy/docker-compose.target.yml`.
+`DEPLOY_PATH` should point to the checkout folder that contains `package.json` and `deploy/docker-compose.target.yml`, for example `/srv/apps/pushgiant/repo`.
+
+The production compose command is always run from the checkout folder with `--env-file ../.env`, so secrets stay outside the git checkout while Docker Compose still receives interpolation variables such as `POSTGRES_PASSWORD`.
 
 ## First Run
 
 ```bash
-docker compose -f deploy/docker-compose.target.yml up -d postgres redis
-docker compose -f deploy/docker-compose.target.yml run --rm push-api npm run migrate -w @pushgiant/api
-docker compose -f deploy/docker-compose.target.yml up -d --build
+docker compose --env-file ../.env -p pushgiant -f deploy/docker-compose.target.yml up -d postgres redis
+docker compose --env-file ../.env -p pushgiant -f deploy/docker-compose.target.yml run --rm push-api npm run migrate -w @pushgiant/api
+docker compose --env-file ../.env -p pushgiant -f deploy/docker-compose.target.yml up -d --build
 ```
 
 The GitHub deploy workflow runs the same migration step before starting the full stack.
