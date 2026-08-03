@@ -28,14 +28,14 @@ jobs:
             set -euo pipefail
 
             APP_DIR="${{ secrets.DEPLOY_PATH }}"
-            COMPOSE="docker compose -p pushgiant -f deploy/docker-compose.target.yml"
+            COMPOSE="docker compose --env-file ../.env -p pushgiant -f deploy/docker-compose.target.yml"
 
             cd "$APP_DIR"
             git fetch --prune origin main
             git checkout main
             git reset --hard origin/main
 
-            test -f .env
+            test -f ../.env
             $COMPOSE config --quiet
             $COMPOSE pull postgres redis
             $COMPOSE up -d postgres redis
