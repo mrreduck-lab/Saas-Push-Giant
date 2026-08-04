@@ -39,6 +39,12 @@ Recommended layout:
 
 The production compose command is always run from the checkout folder with `--env-file ../.env`, so secrets stay outside the git checkout while Docker Compose still receives interpolation variables such as `POSTGRES_PASSWORD`.
 
+The admin dashboard reads live API data through server-side proxy routes. Set these values in the production `.env`:
+
+- `PUSHGIANT_API_URL`, usually `http://push-api:3100` inside Docker;
+- `PUSHGIANT_PROJECT_ID`, the pilot project UUID;
+- `PUSHGIANT_API_KEY`, an API key with `analytics:read`, `subscribers:read`, `campaigns:write`, and `campaigns:send`.
+
 ## First Run
 
 ```bash
