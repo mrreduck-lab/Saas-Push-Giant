@@ -41,6 +41,7 @@ jobs:
             $COMPOSE up -d postgres redis
             $COMPOSE build admin push-api push-worker push-scheduler
             $COMPOSE run --rm push-api npm run migrate -w @pushgiant/api
+            $COMPOSE run --rm push-api npm run seed:demo -w @pushgiant/api
             $COMPOSE up -d --remove-orphans
 
             for attempt in $(seq 1 30); do
