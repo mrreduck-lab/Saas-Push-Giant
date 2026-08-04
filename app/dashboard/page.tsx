@@ -144,7 +144,7 @@ export default function DashboardPage() {
             <p>Control project</p>
             <h1>Raschini pilot dashboard</h1>
           </div>
-          <a href="/api/platform/wordpress-plugin">Download WordPress plugin</a>
+          <a href="/downloads/pushgiant-wordpress.zip">Download WordPress plugin</a>
         </div>
 
         {error ? (
