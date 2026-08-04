@@ -70,6 +70,13 @@ export function buildServer({ config, database, queues }: ServerDeps) {
     };
   });
 
+  app.get("/sdk/pushgiant.js", async (_request, reply) => {
+    return reply
+      .type("application/javascript; charset=utf-8")
+      .header("Cache-Control", "public, max-age=300, stale-while-revalidate=86400")
+      .send(PUSHGIANT_BROWSER_SDK);
+  });
+
   app.get("/v1/projects/:projectId/config", async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
     const result = await database.pool.query(
@@ -296,3 +303,187 @@ function readApiKey(request: FastifyRequest): string | null {
 
   return null;
 }
+
+const PUSHGIANT_BROWSER_SDK = String.raw`
+(function (window) {
+  if (window.PushGiant) return;
+
+  var state = { config: null };
+
+  function init(config) {
+    if (!config || !config.projectId || !config.apiUrl) {
+      throw new Error("PushGiant.init requires projectId and apiUrl");
+    }
+
+    state.config = {
+      projectId: config.projectId,
+      apiUrl: String(config.apiUrl).replace(/\/$/, ""),
+      serviceWorkerPath: config.serviceWorkerPath || "/pushgiant-sw.js",
+      anonymousId: config.anonymousId || getAnonymousId(),
+      externalCustomerId: config.externalCustomerId || null,
+      externalSource: config.externalSource || "web"
+    };
+
+    heartbeat().catch(function () {});
+    return window.PushGiant;
+  }
+
+  function isSupported() {
+    return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  }
+
+  async function subscribe() {
+    var config = requireConfig();
+    if (!isSupported()) return { status: "unsupported" };
+
+    var permission = await Notification.requestPermission();
+    if (permission !== "granted") return { status: permission };
+
+    var projectConfig = await request(config.apiUrl + "/v1/projects/" + encodeURIComponent(config.projectId) + "/config");
+    if (!projectConfig.publicKey) throw new Error("Push Giant public key is not configured");
+
+    var registration = await navigator.serviceWorker.register(config.serviceWorkerPath);
+    var subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(projectConfig.publicKey)
+      });
+    }
+
+    var subscriptionJson = subscription.toJSON();
+    await request(config.apiUrl + "/v1/subscriptions/upsert", {
+      method: "POST",
+      body: JSON.stringify({
+        project_id: config.projectId,
+        anonymous_id: config.anonymousId,
+        external_customer_id: config.externalCustomerId || undefined,
+        external_source: config.externalSource,
+        endpoint: subscription.endpoint,
+        keys: subscriptionJson.keys,
+        content_encoding: "aes128gcm",
+        permission: Notification.permission,
+        platform: navigator.platform,
+        browser: detectBrowser(),
+        os: detectOs(),
+        user_agent: navigator.userAgent,
+        locale: navigator.language,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      })
+    });
+
+    await track({ type: "subscription.granted" }).catch(function () {});
+    return { status: "subscribed" };
+  }
+
+  async function heartbeat() {
+    var config = requireConfig();
+    return request(config.apiUrl + "/v1/subscribers/heartbeat", {
+      method: "POST",
+      body: JSON.stringify({
+        project_id: config.projectId,
+        anonymous_id: config.anonymousId,
+        external_customer_id: config.externalCustomerId || undefined,
+        permission: typeof Notification === "undefined" ? "default" : Notification.permission,
+        platform: navigator.platform,
+        browser: detectBrowser(),
+        os: detectOs(),
+        user_agent: navigator.userAgent,
+        locale: navigator.language,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      })
+    });
+  }
+
+  async function track(event) {
+    var config = requireConfig();
+    return request(config.apiUrl + "/v1/events/track", {
+      method: "POST",
+      body: JSON.stringify({
+        project_id: config.projectId,
+        anonymous_id: config.anonymousId,
+        external_customer_id: config.externalCustomerId || undefined,
+        type: event.type,
+        payload: event.payload || {}
+      })
+    });
+  }
+
+  async function updateGeo(position, consentVersion) {
+    var config = requireConfig();
+    return request(config.apiUrl + "/v1/subscribers/geo", {
+      method: "POST",
+      body: JSON.stringify({
+        project_id: config.projectId,
+        anonymous_id: config.anonymousId,
+        external_customer_id: config.externalCustomerId || undefined,
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        consent_version: consentVersion || "v1"
+      })
+    });
+  }
+
+  function requireConfig() {
+    if (!state.config) throw new Error("PushGiant SDK is not initialized");
+    return state.config;
+  }
+
+  async function request(url, init) {
+    var response = await fetch(url, Object.assign({}, init, {
+      headers: Object.assign({ "Content-Type": "application/json" }, init && init.headers)
+    }));
+    var data = await response.json().catch(function () { return {}; });
+    if (!response.ok) throw new Error(data.error || "Push Giant request failed: " + response.status);
+    return data;
+  }
+
+  function getAnonymousId() {
+    var key = "pushgiant_anonymous_id";
+    var existing = window.localStorage && localStorage.getItem(key);
+    if (existing) return existing;
+    var value = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
+    if (window.localStorage) localStorage.setItem(key, value);
+    return value;
+  }
+
+  function detectBrowser() {
+    var ua = navigator.userAgent;
+    if (/Edg\//.test(ua)) return "Edge";
+    if (/Chrome\//.test(ua)) return "Chrome";
+    if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) return "Safari";
+    if (/Firefox\//.test(ua)) return "Firefox";
+    return "unknown";
+  }
+
+  function detectOs() {
+    var ua = navigator.userAgent;
+    if (/iPhone|iPad|iPod/.test(ua)) return "iOS";
+    if (/Android/.test(ua)) return "Android";
+    if (/Mac OS X/.test(ua)) return "macOS";
+    if (/Windows/.test(ua)) return "Windows";
+    return "unknown";
+  }
+
+  function urlBase64ToUint8Array(value) {
+    var padding = "=".repeat((4 - value.length % 4) % 4);
+    var base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+    var raw = atob(base64);
+    var output = new Uint8Array(raw.length);
+    for (var index = 0; index < raw.length; index += 1) {
+      output[index] = raw.charCodeAt(index);
+    }
+    return output;
+  }
+
+  window.PushGiant = {
+    init: init,
+    subscribe: subscribe,
+    heartbeat: heartbeat,
+    track: track,
+    updateGeo: updateGeo,
+    isSupported: isSupported
+  };
+})(window);
+`;
