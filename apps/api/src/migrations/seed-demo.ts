@@ -134,8 +134,7 @@ if (shouldGenerateDemoVapid) {
       on conflict (project_id) do update set
         public_key = excluded.public_key,
         private_key_encrypted = excluded.private_key_encrypted,
-        subject = excluded.subject,
-        updated_at = now()
+        subject = excluded.subject
     `,
     [projectId, organizationId, vapidKeys.publicKey, cipher.encrypt(vapidKeys.privateKey), vapidSubject]
   );
