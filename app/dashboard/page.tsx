@@ -132,7 +132,7 @@ export default function DashboardPage() {
         <nav>{dashboardSections.map((item) => <a href={`#${item}`} key={item}>{item}</a>)}</nav>
         <div className="project">
           <span>Project</span>
-          <strong>Raschini</strong>
+          <strong>Demo project</strong>
           <small>{loading ? 'loading API' : error ? 'API attention needed' : 'live API connected'}</small>
         </div>
       </aside>
@@ -141,7 +141,7 @@ export default function DashboardPage() {
         <div className="topline">
           <div>
             <p>Control project</p>
-            <h1>Raschini pilot dashboard</h1>
+            <h1>Push Giant dashboard</h1>
           </div>
           <a href="/downloads/pushgiant-wordpress.zip">Download WordPress plugin</a>
         </div>
@@ -189,7 +189,7 @@ export default function DashboardPage() {
           <form onSubmit={sendCampaign}>
             <input name="title" placeholder="Заголовок push" required maxLength={120} />
             <textarea name="body" placeholder="Текст уведомления" required maxLength={240} />
-            <input name="url" type="url" placeholder="https://raschini.com/new/" />
+            <input name="url" type="url" placeholder="https://example.com/new/" />
             <button disabled={sendState === 'sending'} type="submit">
               {sendState === 'sending' ? 'Отправляем...' : 'Отправить сейчас'}
             </button>
@@ -202,7 +202,7 @@ export default function DashboardPage() {
             <p>Название, иконка, цвет, start URL, manifest, service worker и инструкция установки.</p>
           </div>
           <div className="phone">
-            <span>Raschini</span>
+            <span>Demo project</span>
             <strong>Add to Home Screen</strong>
             <small>manifest + service worker pilot</small>
           </div>
@@ -213,7 +213,7 @@ export default function DashboardPage() {
           {[
             ['Все активные', 'Подписчики с active endpoint'],
             ['Новые 7 дней', 'last_seen_at за последнюю неделю'],
-            ['Raschini testers', 'ручной pilot-сегмент для первого запуска']
+            ['Тестовая группа', 'ручной сегмент для первого запуска']
           ].map(([title, note]) => (
             <article key={title}>
               <strong>{title}</strong>

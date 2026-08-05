@@ -1,0 +1,23 @@
+:root {
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-sans: Arial, Helvetica, sans-serif;
+  --pg-bg: #f5f1ea;
+  --pg-card: #fffaf3;
+  --pg-ink: #15120f;
+  --pg-muted: #5d5247;
+  --pg-accent: #95744d;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--pg-bg);
+  color: var(--pg-ink);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+button, input, textarea, select { font: inherit; }
+::selection { background: #b59a75; color: #fff; }

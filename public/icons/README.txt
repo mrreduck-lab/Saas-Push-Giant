@@ -1,1 +1,1 @@
-Generated Raschini PWA icon assets live in this directory.
+Generated Push Giant PWA icon assets live in this directory.

@@ -1,5 +1,4 @@
 import { ImageResponse } from 'next/og';
-import type { NextRequest } from 'next/server';
 
 export const runtime = 'edge';
 
@@ -13,12 +12,12 @@ const sizes: Record<string, number> = {
   'favicon-16.png': 16,
 };
 
-export async function GET(request: NextRequest, { params }: { params: { name: string } }) {
+export async function GET(_request: Request, { params }: { params: { name: string } }) {
   const size = sizes[params.name];
   if (!size) return new Response('Not found', { status: 404 });
 
-  const logoUrl = new URL('/IMG_4803.png', request.url).toString();
-  const isTiny = size <= 32;
+  const tiny = size <= 32;
+  const maskable = params.name.includes('maskable');
 
   return new ImageResponse(
     (
@@ -29,27 +28,22 @@ export async function GET(request: NextRequest, { params }: { params: { name: st
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#ffffff',
-          padding: isTiny ? '2px' : size >= 512 ? '44px' : '18px',
+          background: '#17130f',
+          color: '#f8f1e6',
+          borderRadius: maskable ? 0 : size >= 180 ? Math.round(size * 0.18) : 0,
+          fontFamily: 'Georgia',
+          fontSize: tiny ? Math.round(size * 0.48) : Math.round(size * 0.42),
+          letterSpacing: tiny ? 0 : '-0.06em',
+          paddingRight: tiny ? 0 : Math.round(size * 0.03),
         }}
       >
-        <img
-          src={logoUrl}
-          alt="Raschini"
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'contain',
-          }}
-        />
+        PG
       </div>
     ),
     {
       width: size,
       height: size,
-      headers: {
-        'Cache-Control': 'public, max-age=31536000, immutable',
-      },
+      headers: { 'Cache-Control': 'public, max-age=31536000, immutable' },
     },
   );
 }

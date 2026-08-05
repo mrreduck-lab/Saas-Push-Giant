@@ -1,7 +1,7 @@
 {
   "name": "Push Giant",
   "short_name": "Push Giant",
-  "description": "PWA and web push platform for pilot commerce projects",
+  "description": "Платформа PWA-приложений, web push-уведомлений, сегментации и аналитики",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -9,19 +9,19 @@
   "theme_color": "#f6f3ee",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "/brand/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/brand/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-maskable-512.png",
+      "src": "/brand/icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

@@ -4,9 +4,9 @@ import { FormEvent, useState } from 'react';
 
 export default function PushAdminPage() {
   const [token, setToken] = useState('');
-  const [title, setTitle] = useState('Новая летняя коллекция Raschini');
-  const [body, setBody] = useState('Неаполитанская лёгкость и новые образы уже доступны онлайн.');
-  const [url, setUrl] = useState('https://raschini.com/new/');
+  const [title, setTitle] = useState('Новости проекта');
+  const [body, setBody] = useState('Новое сообщение уже доступно на сайте.');
+  const [url, setUrl] = useState('https://pushgiant.ru/');
   const [image, setImage] = useState('');
   const [result, setResult] = useState('');
   const [sending, setSending] = useState(false);
@@ -48,14 +48,14 @@ export default function PushAdminPage() {
   return (
     <main className="admin">
       <form onSubmit={submit}>
-        <p>Raschini PWA</p>
+        <p>Push Giant</p>
         <h1>Отправить push</h1>
         <label>Секрет администратора<input type="password" value={token} onChange={(e) => setToken(e.target.value)} required /></label>
         <label>Заголовок<input value={title} onChange={(e) => setTitle(e.target.value)} required /></label>
         <label>Текст<textarea value={body} onChange={(e) => setBody(e.target.value)} required /></label>
         <label>Ссылка<input type="url" value={url} onChange={(e) => setUrl(e.target.value)} required /></label>
         <label>Фото для push — HTTPS-ссылка, необязательно<input type="url" placeholder="https://.../photo.jpg" value={image} onChange={(e) => setImage(e.target.value)} /></label>
-        <small>Без фото используется фирменная иконка Raschini. С фото оно подставляется в уведомление; отображение крупного изображения зависит от устройства.</small>
+        <small>Без фото используется иконка проекта. С фото оно подставляется в уведомление; отображение крупного изображения зависит от устройства.</small>
         <button type="submit" disabled={sending}>{sending ? 'Отправляем…' : 'Отправить уведомление'}</button>
         <a href="/debug-push">Открыть диагностику</a>
         <output>{result}</output>

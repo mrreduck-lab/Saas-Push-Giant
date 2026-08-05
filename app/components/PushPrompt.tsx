@@ -57,8 +57,8 @@ export default function PushPrompt() {
 
   return (
     <button className="pushPrompt" onClick={subscribe} disabled={status === 'loading'}>
-      <span>{status === 'done' ? 'Уведомления включены' : status === 'error' ? 'Не удалось включить' : 'Получать новости Raschini'}</span>
-      <small>{status === 'idle' ? 'Редкие уведомления о коллекциях и событиях' : status === 'loading' ? 'Подключаем…' : ''}</small>
+      <span>{status === 'done' ? 'Уведомления включены' : status === 'error' ? 'Не удалось включить' : 'Получать новости Push Giant'}</span>
+      <small>{status === 'idle' ? 'Обновления платформы и практики мобильного маркетинга' : status === 'loading' ? 'Подключаем…' : ''}</small>
       <style jsx>{`
         .pushPrompt{position:fixed;z-index:65;right:18px;bottom:max(18px,env(safe-area-inset-bottom));max-width:310px;padding:15px 18px;border:1px solid rgba(155,120,68,.4);background:rgba(244,239,232,.96);color:#17130f;text-align:left;box-shadow:0 12px 38px rgba(0,0,0,.14);cursor:pointer}
         span{display:block;font-family:var(--font-display),serif;font-size:19px;line-height:1.05}

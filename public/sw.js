@@ -5,8 +5,8 @@ self.addEventListener('push', (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch {}
 
-  const title = data.title || 'Raschini';
-  const fallbackIcon = '/icons/push-icon-192.png';
+  const title = data.title || 'Push Giant';
+  const fallbackIcon = '/brand/push-icon-192.png';
   const image = typeof data.image === 'string' && data.image ? data.image : undefined;
 
   event.waitUntil(self.registration.showNotification(title, {
@@ -15,7 +15,7 @@ self.addEventListener('push', (event) => {
     image,
     badge: fallbackIcon,
     data: { url: data.url || '/' },
-    tag: data.tag || `raschini-news-${Date.now()}`,
+    tag: data.tag || `pushgiant-${Date.now()}`,
     renotify: true,
   }));
 });

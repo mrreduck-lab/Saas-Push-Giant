@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Push Giant
  * Description: Connects a WordPress site to Push Giant PWA and Web Push.
- * Version: 0.1.0
+ * Version: 0.1.1
  * Author: Push Giant
  */
 
@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('PUSHGIANT_VERSION', '0.1.0');
+define('PUSHGIANT_VERSION', '0.1.1');
 define('PUSHGIANT_OPTION_PROJECT_ID', 'pushgiant_project_id');
 define('PUSHGIANT_OPTION_API_KEY', 'pushgiant_api_key');
 define('PUSHGIANT_OPTION_API_URL', 'pushgiant_api_url');
@@ -124,7 +124,7 @@ function pushgiant_render_settings_page() {
             </table>
             <?php submit_button('Save Push Giant settings'); ?>
         </form>
-        <p>После сохранения сайт подключит SDK, manifest endpoint, service worker route и storefront prompt для пилота Raschini.</p>
+        <p>После сохранения сайт подключит SDK, manifest endpoint, service worker route и форму подписки Push Giant.</p>
     </div>
     <?php
 }

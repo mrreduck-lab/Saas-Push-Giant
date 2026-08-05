@@ -54,7 +54,7 @@ export default function DebugPushPage() {
   return (
     <main className="debug">
       <section>
-        <p>Raschini PWA</p>
+        <p>Push Giant</p>
         <h1>Диагностика push</h1>
         <label>Секрет администратора<input type="password" value={token} onChange={(event) => setToken(event.target.value)} /></label>
         <button type="button" onClick={runDiagnostics} disabled={loading}>{loading ? 'Проверяем…' : 'Запустить диагностику'}</button>
