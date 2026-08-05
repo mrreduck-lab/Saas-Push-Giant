@@ -30,6 +30,12 @@ type SubscribersResponse = {
   subscribers?: Subscriber[];
 };
 
+type TestConfig = {
+  projectId: string;
+  publicKey: string;
+  serviceWorkerPath: string;
+};
+
 export default function DashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
@@ -37,6 +43,10 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
   const [sendMessage, setSendMessage] = useState<string | null>(null);
+  const [testState, setTestState] = useState<'idle' | 'requesting' | 'sending' | 'reset' | 'failed'>('idle');
+  const [testMessage, setTestMessage] = useState<string | null>(null);
+  const [isStandalonePwa, setIsStandalonePwa] = useState(false);
+  const [pwaModeChecked, setPwaModeChecked] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -86,6 +96,29 @@ export default function DashboardPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const displayModeQueries = [
+      window.matchMedia('(display-mode: standalone)'),
+      window.matchMedia('(display-mode: fullscreen)'),
+      window.matchMedia('(display-mode: minimal-ui)')
+    ];
+    const updatePwaMode = () => {
+      setIsStandalonePwa(isRunningAsInstalledPwa());
+      setPwaModeChecked(true);
+    };
+
+    updatePwaMode();
+    displayModeQueries.forEach((query) => query.addEventListener('change', updatePwaMode));
+    window.addEventListener('focus', updatePwaMode);
+    document.addEventListener('visibilitychange', updatePwaMode);
+
+    return () => {
+      displayModeQueries.forEach((query) => query.removeEventListener('change', updatePwaMode));
+      window.removeEventListener('focus', updatePwaMode);
+      document.removeEventListener('visibilitychange', updatePwaMode);
+    };
+  }, []);
+
   const metrics = useMemo(() => [
     ['Подписчики', formatNumber(overview?.subscribers), 'all time'],
     ['Активные устройства', formatNumber(overview?.active_devices), 'active push endpoints'],
@@ -123,6 +156,90 @@ export default function DashboardPage() {
     setSendState('sent');
     setSendMessage(`Кампания поставлена в очередь: ${data.id ?? 'accepted'}`);
     event.currentTarget.reset();
+  }
+
+  async function runOneShotTest() {
+    let subscription: PushSubscription | null = null;
+
+    setTestState('requesting');
+    setTestMessage('Проверяем, что тест открыт из PWA на экране Домой...');
+
+    try {
+      if (!isRunningAsInstalledPwa()) {
+        setIsStandalonePwa(false);
+        setPwaModeChecked(true);
+        setTestState('failed');
+        setTestMessage('Сначала добавьте сайт на экран Домой и откройте Push Giant с иконки. Потом тестовый push будет честно проверять PWA, а не вкладку браузера.');
+        return;
+      }
+
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+        throw new Error('Этот браузер не поддерживает Web Push.');
+      }
+
+      setTestMessage('Запрашиваем разрешение и готовим временную подписку...');
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setTestState('failed');
+        setTestMessage(permission === 'denied'
+          ? 'Уведомления заблокированы в браузере. Разрешение нужно включить в настройках сайта.'
+          : 'Разрешение на уведомления не выдано.');
+        return;
+      }
+
+      const configResponse = await fetch('/api/platform/test/config', { cache: 'no-store' });
+      const config = await configResponse.json().catch(() => ({})) as Partial<TestConfig>;
+      if (!configResponse.ok || !config.publicKey || !config.serviceWorkerPath) {
+        throw new Error(configResponse.ok ? 'test_config_missing' : `test_config_failed_${configResponse.status}`);
+      }
+
+      const registration = await navigator.serviceWorker.register(config.serviceWorkerPath);
+      subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(config.publicKey)
+        });
+      }
+
+      const anonymousId = `pg_test_${crypto.randomUUID().replace(/-/g, '')}`;
+      setTestState('sending');
+      setTestMessage('Отправляем один push только на это устройство...');
+
+      const sendResponse = await fetch('/api/platform/test/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          anonymousId,
+          subscription: subscription.toJSON(),
+          title: 'Push Giant работает',
+          body: 'Это тестовое уведомление. Подписка уже сброшена, повторной рассылки не будет.',
+          url: '/',
+          platform: navigator.platform,
+          browser: detectBrowser(navigator.userAgent),
+          userAgent: navigator.userAgent,
+          locale: navigator.language,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          permission: Notification.permission
+        })
+      });
+      const sendData = await sendResponse.json().catch(() => ({}));
+
+      if (!sendResponse.ok) {
+        throw new Error(sendData.error ?? `test_send_failed_${sendResponse.status}`);
+      }
+
+      await subscription.unsubscribe().catch(() => false);
+      setTestState('reset');
+      setTestMessage('Тестовый push отправлен. Временная подписка сброшена на сервере и в браузере.');
+    } catch (testError) {
+      if (subscription) {
+        await subscription.unsubscribe().catch(() => false);
+      }
+
+      setTestState('failed');
+      setTestMessage(testError instanceof Error ? testError.message : 'test_send_failed');
+    }
   }
 
   return (
@@ -163,6 +280,41 @@ export default function DashboardPage() {
                 <small>{note}</small>
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className="panel split testPanel">
+          <div>
+            <p className="eyebrow">Test project</p>
+            <h2>Проверить push на себе</h2>
+            <p>
+              Кабинет работает только из PWA, открытого с экрана Домой: создаёт временную подписку,
+              отправляет один тестовый push и сразу сбрасывает её на сервере и устройстве.
+            </p>
+            {!isStandalonePwa && pwaModeChecked ? (
+              <div className="installNotice">
+                Добавьте сайт на экран Домой и откройте приложение с иконки, чтобы включить тест.
+              </div>
+            ) : null}
+            {testMessage ? <div className={`send ${testState === 'failed' ? 'failed' : 'sent'}`}>{testMessage}</div> : null}
+          </div>
+          <div className="testBox">
+            <span>one-shot</span>
+            <strong>1 push</strong>
+            <small>{isStandalonePwa ? 'без сохранения активной тестовой аудитории' : 'сначала запуск с экрана Домой'}</small>
+            <button
+              type="button"
+              onClick={runOneShotTest}
+              disabled={!isStandalonePwa || testState === 'requesting' || testState === 'sending'}
+            >
+              {!isStandalonePwa
+                ? 'Откройте PWA'
+                : testState === 'requesting'
+                  ? 'Готовим...'
+                  : testState === 'sending'
+                    ? 'Отправляем...'
+                    : 'Отправить себе тест'}
+            </button>
           </div>
         </section>
 
@@ -305,6 +457,7 @@ export default function DashboardPage() {
         .alert{border-color:#b4513a;background:#fff4ed;display:grid;gap:6px}
         .alert strong{font-size:18px}
         .alert span{color:#7c3f31}
+        .eyebrow{margin:0 0 8px;text-transform:uppercase;letter-spacing:.18em;font-size:10px;color:#a98d66}
         h2{margin:0 0 18px;font-family:var(--font-display),Georgia,serif;font-weight:400;font-size:34px}
         .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
         article{border:1px solid rgba(21,18,15,.1);border-radius:8px;padding:16px;background:#fff}
@@ -317,6 +470,13 @@ export default function DashboardPage() {
         .table .empty{grid-column:1/-1;color:#6f5d49}
         .split{display:grid;grid-template-columns:1fr minmax(260px,.8fr);gap:24px;align-items:start}
         .split p{margin:0;color:#62574c;line-height:1.55}
+        .testPanel{border-color:rgba(169,141,102,.34);background:#fff7eb}
+        .testBox{border-radius:18px;background:#17130f;color:#fff;min-height:220px;padding:22px;display:grid;align-content:end;gap:8px}
+        .testBox span{color:#c9ad80;text-transform:uppercase;letter-spacing:.16em;font-size:10px}
+        .testBox strong{font-family:var(--font-display),Georgia,serif;font-size:46px;font-weight:400;line-height:1}
+        .testBox small{color:#cfc5b8;margin-bottom:8px}
+        .testBox button{background:#f8f3ea;color:#17130f;border-color:#f8f3ea}
+        .installNotice{margin-top:16px;border:1px solid rgba(169,141,102,.35);border-radius:8px;padding:12px;background:#fffaf3;color:#6d5638;line-height:1.45}
         .send{margin-top:16px;border-radius:8px;padding:12px;background:#f0eadf;color:#4d4338}
         .send.sent{background:#e6f3e8;color:#285634}
         .send.failed{background:#fff0ea;color:#873c2c}
@@ -354,4 +514,27 @@ function SubscriberRow({ subscriber }: { subscriber: Subscriber }) {
 function formatNumber(value?: number) {
   if (typeof value !== 'number') return '0';
   return new Intl.NumberFormat('ru-RU').format(value);
+}
+
+function detectBrowser(userAgent: string) {
+  if (/Edg\//.test(userAgent)) return 'Edge';
+  if (/Chrome\//.test(userAgent) && !/Edg\//.test(userAgent)) return 'Chrome';
+  if (/Safari\//.test(userAgent) && !/Chrome\//.test(userAgent)) return 'Safari';
+  if (/Firefox\//.test(userAgent)) return 'Firefox';
+  return 'unknown';
+}
+
+function isRunningAsInstalledPwa() {
+  const navigatorWithStandalone = navigator as Navigator & { standalone?: boolean };
+  return navigatorWithStandalone.standalone === true
+    || window.matchMedia('(display-mode: standalone)').matches
+    || window.matchMedia('(display-mode: fullscreen)').matches
+    || window.matchMedia('(display-mode: minimal-ui)').matches;
+}
+
+function urlBase64ToUint8Array(value: string) {
+  const padding = '='.repeat((4 - value.length % 4) % 4);
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from(Array.from(raw, (char) => char.charCodeAt(0)));
 }

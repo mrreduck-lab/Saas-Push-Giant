@@ -121,6 +121,16 @@ export const campaignCreateSchema = z.object({
 
 export type CampaignCreate = z.infer<typeof campaignCreateSchema>;
 
+export const testNotificationSchema = z.object({
+  project_id: z.string().uuid(),
+  anonymous_id: z.string().min(10).max(120).regex(/^pg_test_[a-zA-Z0-9_-]+$/),
+  title: z.string().min(1).max(120),
+  body: z.string().min(1).max(240),
+  url: z.string().url().optional()
+});
+
+export type TestNotification = z.infer<typeof testNotificationSchema>;
+
 export type DataCipher = {
   encrypt(value: string): string;
   decrypt(envelope: string): string;

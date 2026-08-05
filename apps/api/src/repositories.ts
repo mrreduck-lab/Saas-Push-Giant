@@ -8,6 +8,7 @@ import type {
   GeoUpdate,
   SubscriberHeartbeat,
   SubscriptionUpsert,
+  TestNotification,
   TrialRegistration
 } from "@pushgiant/shared";
 
@@ -35,6 +36,19 @@ export type TrialCredentials = {
   projectId: string;
   apiKey: string;
   trialEndsAt: string;
+};
+
+export type TestNotificationTarget = {
+  organization_id: string;
+  project_id: string;
+  subscriber_id: string;
+  subscription_id: string;
+  endpoint_encrypted: string;
+  p256dh_encrypted: string;
+  auth_encrypted: string;
+  public_key: string;
+  private_key_encrypted: string;
+  subject: string;
 };
 
 type SubscriberIdentityPayload = {
@@ -665,4 +679,92 @@ export async function markCampaignQueued(
   );
 
   return result.rows[0] ?? null;
+}
+
+export async function loadTestNotificationTarget(
+  pool: Pool,
+  apiKey: ApiKeyIdentity,
+  payload: TestNotification
+): Promise<TestNotificationTarget | null> {
+  const project = await findActiveProjectForApiKey(pool, payload.project_id, apiKey);
+  if (!project) {
+    return null;
+  }
+
+  const result = await pool.query<TestNotificationTarget>(
+    `
+      select
+        s.organization_id,
+        s.project_id,
+        s.id as subscriber_id,
+        ps.id as subscription_id,
+        ps.endpoint_encrypted,
+        ps.p256dh_encrypted,
+        ps.auth_encrypted,
+        vc.public_key,
+        vc.private_key_encrypted,
+        vc.subject
+      from subscribers s
+      join push_subscriptions ps on ps.subscriber_id = s.id
+      join vapid_credentials vc on vc.project_id = s.project_id
+      where s.project_id = $1
+        and s.organization_id = $2
+        and s.anonymous_id = $3
+        and s.anonymous_id like 'pg_test_%'
+        and ps.status = 'active'
+      order by ps.last_seen_at desc
+      limit 1
+    `,
+    [project.id, project.organization_id, payload.anonymous_id]
+  );
+
+  return result.rows[0] ?? null;
+}
+
+export async function resetTestNotificationTarget(
+  pool: Pool,
+  target: TestNotificationTarget,
+  status: "sent" | "failed",
+  providerStatusCode?: number,
+  errorCode?: string
+) {
+  await pool.query(
+    `
+      update push_subscriptions
+      set
+        status = 'disabled',
+        disabled_at = now(),
+        last_success_at = case when $2 = 'sent' then now() else last_success_at end,
+        last_failure_at = case when $2 = 'failed' then now() else last_failure_at end,
+        failure_count = case when $2 = 'failed' then failure_count + 1 else 0 end,
+        updated_at = now()
+      where id = $1
+    `,
+    [target.subscription_id, status]
+  );
+
+  await pool.query(
+    `
+      insert into events (
+        organization_id,
+        project_id,
+        subscriber_id,
+        type,
+        payload_json
+      )
+      values ($1, $2, $3, $4, $5::jsonb)
+    `,
+    [
+      target.organization_id,
+      target.project_id,
+      target.subscriber_id,
+      status === "sent" ? "test.notification.sent" : "test.notification.failed",
+      JSON.stringify({
+        subscription_id: target.subscription_id,
+        provider_status_code: providerStatusCode ?? null,
+        error_code: errorCode ?? null,
+        reset: true
+      })
+    ]
+  );
 }

@@ -11,6 +11,7 @@ import {
   geoUpdateSchema,
   subscriberHeartbeatSchema,
   subscriptionUpsertSchema,
+  testNotificationSchema,
   trialRegistrationSchema
 } from "@pushgiant/shared";
 import type { ApiConfig } from "./config.js";
@@ -22,9 +23,11 @@ import {
   createTrialRegistration,
   getProjectOverview,
   listProjectSubscribers,
+  loadTestNotificationTarget,
   markCampaignQueued,
   recordEvent,
   recordHeartbeat,
+  resetTestNotificationTarget,
   updateSubscriberGeo,
   upsertSubscription
 } from "./repositories.js";
@@ -285,6 +288,82 @@ export function buildServer({ config, database, queues }: ServerDeps) {
     return reply.code(202).send({ id: campaignId, status: campaign.status });
   });
 
+  app.post("/v1/projects/:projectId/test-notification", async (request, reply) => {
+    const apiKey = await requireApiKey(request, database, ["campaigns:send"]);
+    if (!apiKey) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+
+    const { projectId } = request.params as { projectId: string };
+    const parsed = testNotificationSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid_test_notification", details: parsed.error.flatten() });
+    }
+
+    if (parsed.data.project_id !== projectId) {
+      return reply.code(400).send({ error: "project_id_mismatch" });
+    }
+
+    const target = await loadTestNotificationTarget(database.pool, apiKey, parsed.data);
+    if (!target) {
+      return reply.code(404).send({ error: "test_subscription_not_found" });
+    }
+
+    webpush.setVapidDetails(
+      target.subject,
+      target.public_key,
+      cipher.decrypt(target.private_key_encrypted)
+    );
+
+    const notificationPayload = JSON.stringify({
+      title: parsed.data.title,
+      body: parsed.data.body,
+      url: parsed.data.url,
+      tag: `pushgiant-test-${parsed.data.anonymous_id}`,
+      test: true
+    });
+
+    try {
+      const response = await webpush.sendNotification(
+        {
+          endpoint: cipher.decrypt(target.endpoint_encrypted),
+          keys: {
+            p256dh: cipher.decrypt(target.p256dh_encrypted),
+            auth: cipher.decrypt(target.auth_encrypted)
+          }
+        },
+        notificationPayload,
+        {
+          TTL: 60,
+          urgency: "normal",
+          topic: "pushgiant-test"
+        }
+      );
+
+      await resetTestNotificationTarget(database.pool, target, "sent", response.statusCode);
+      return reply.code(202).send({
+        status: "sent",
+        provider_status_code: response.statusCode,
+        reset: true
+      });
+    } catch (error) {
+      const statusCode = readStatusCode(error);
+      await resetTestNotificationTarget(
+        database.pool,
+        target,
+        "failed",
+        statusCode,
+        error instanceof Error ? error.message : "unknown_error"
+      );
+
+      return reply.code(502).send({
+        error: "test_notification_failed",
+        provider_status_code: statusCode,
+        reset: true
+      });
+    }
+  });
+
   return app;
 }
 
@@ -322,6 +401,15 @@ function readApiKey(request: FastifyRequest): string | null {
   }
 
   return null;
+}
+
+function readStatusCode(error: unknown): number | undefined {
+  if (typeof error === "object" && error && "statusCode" in error) {
+    const value = (error as { statusCode?: unknown }).statusCode;
+    return typeof value === "number" ? value : undefined;
+  }
+
+  return undefined;
 }
 
 const PUSHGIANT_BROWSER_SDK = String.raw`
