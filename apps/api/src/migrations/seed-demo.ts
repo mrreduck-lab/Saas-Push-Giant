@@ -1,10 +1,12 @@
 import pg from "pg";
+import webpush from "web-push";
 import { apiKeyPrefix, createDataCipher, hashSecret } from "@pushgiant/shared";
 
 const databaseUrl = process.env.DATABASE_URL ?? "postgres://pushgiant:pushgiant@localhost:5432/pushgiant";
 const pool = new pg.Pool({ connectionString: databaseUrl });
 const cipher = createDataCipher(process.env.DATA_ENCRYPTION_KEY);
 const demoApiKey = process.env.DEMO_API_KEY ?? "pg_dev_demo_key_change_me";
+const vapidSubject = process.env.VAPID_SUBJECT ?? "mailto:ops@pushgiant.ru";
 
 const organizationId = "11111111-1111-4111-8111-111111111111";
 const projectId = "22222222-2222-4222-8222-222222222222";
@@ -96,14 +98,51 @@ await pool.query(
   [projectId, organizationId]
 );
 
-await pool.query(
+const existingVapid = await pool.query<{
+  public_key: string | null;
+  private_key_encrypted: string | null;
+}>(
   `
-    insert into vapid_credentials (project_id, organization_id, public_key, private_key_encrypted, subject)
-    values ($1, $2, 'demo-public-vapid-key', $3, 'mailto:ops@example.com')
-    on conflict (project_id) do update set public_key = excluded.public_key
+    select public_key, private_key_encrypted
+    from vapid_credentials
+    where project_id = $1
+    limit 1
   `,
-  [projectId, organizationId, cipher.encrypt("demo-private-vapid-key")]
+  [projectId]
 );
+const existingVapidRow = existingVapid.rows[0];
+let existingPrivateKey: string | null = null;
+if (existingVapidRow?.private_key_encrypted) {
+  try {
+    existingPrivateKey = cipher.decrypt(existingVapidRow.private_key_encrypted);
+  } catch {
+    existingPrivateKey = "invalid";
+  }
+}
+
+const shouldGenerateDemoVapid = !existingVapidRow
+  || existingVapidRow.public_key === "demo-public-vapid-key"
+  || existingPrivateKey === "demo-private-vapid-key"
+  || existingPrivateKey === "invalid";
+
+if (shouldGenerateDemoVapid) {
+  const vapidKeys = webpush.generateVAPIDKeys();
+  await pool.query(
+    `
+      insert into vapid_credentials (project_id, organization_id, public_key, private_key_encrypted, subject)
+      values ($1, $2, $3, $4, $5)
+      on conflict (project_id) do update set
+        public_key = excluded.public_key,
+        private_key_encrypted = excluded.private_key_encrypted,
+        subject = excluded.subject,
+        updated_at = now()
+    `,
+    [projectId, organizationId, vapidKeys.publicKey, cipher.encrypt(vapidKeys.privateKey), vapidSubject]
+  );
+  console.log("Generated real demo VAPID credentials.");
+} else {
+  console.log("Keeping existing demo VAPID credentials.");
+}
 
 await pool.query(
   `
