@@ -37,7 +37,7 @@ Recommended layout:
 
 `DEPLOY_PATH` should point to the checkout folder that contains `package.json` and `deploy/docker-compose.target.yml`, for example `/srv/apps/pushgiant/repo`.
 
-The production compose command is always run from the checkout folder with `--env-file ../.env`, so secrets stay outside the git checkout while Docker Compose still receives interpolation variables such as `POSTGRES_PASSWORD`.
+The production deploy workflow resolves `../.env` to an absolute `PUSHGIANT_ENV_FILE` path, then passes the same file to Docker Compose and to every app container. This keeps secrets outside the git checkout and prevents Compose interpolation from using a different `.env` file than the app runtime.
 
 The admin dashboard reads live API data through server-side proxy routes. Set these values in the production `.env`:
 
