@@ -47,7 +47,8 @@ jobs:
             $COMPOSE up -d --remove-orphans
 
             for attempt in $(seq 1 30); do
-              if curl --fail --silent --show-error http://127.0.0.1:3101/ >/dev/null; then
+              if curl --fail --silent --show-error http://127.0.0.1:3101/ >/dev/null \
+                && curl --fail --silent --show-error http://127.0.0.1:3100/readyz >/dev/null; then
                 break
               fi
               if [ "$attempt" -eq 30 ]; then
@@ -58,5 +59,44 @@ jobs:
               sleep 2
             done
 
+            if [ -d /etc/nginx/sites-available ]; then
+              if [ "$(id -u)" -eq 0 ]; then
+                SUDO=""
+              elif sudo -n true 2>/dev/null; then
+                SUDO="sudo"
+              else
+                SUDO=""
+              fi
+
+              if [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ]; then
+                $SUDO cp deploy/nginx/pushgiant.conf /etc/nginx/sites-available/pushgiant
+                $SUDO ln -sfn /etc/nginx/sites-available/pushgiant /etc/nginx/sites-enabled/pushgiant
+                $SUDO nginx -t
+                $SUDO systemctl reload nginx
+              else
+                echo "Skipping nginx config install: deploy user has no passwordless sudo."
+              fi
+            fi
+
             $COMPOSE ps
             docker image prune -f
+
+      - name: Public HTTPS smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          html="$(mktemp)"
+          curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30 \
+            https://pushgiant.ru/ -o "$html"
+
+          css_path="$(grep -oE '/_next/static/css/[^"]+\.css' "$html" | head -n 1 || true)"
+          if [ -z "$css_path" ]; then
+            echo "No Next.js CSS asset found in public HTML." >&2
+            exit 1
+          fi
+
+          curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30 \
+            "https://pushgiant.ru${css_path}" -o /dev/null
+          curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30 \
+            https://api.pushgiant.ru/readyz -o /dev/null
