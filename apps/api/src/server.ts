@@ -3,13 +3,15 @@ import helmet from "@fastify/helmet";
 import Fastify from "fastify";
 import type { FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
+import webpush from "web-push";
 import {
   campaignCreateSchema,
   createDataCipher,
   eventTrackSchema,
   geoUpdateSchema,
   subscriberHeartbeatSchema,
-  subscriptionUpsertSchema
+  subscriptionUpsertSchema,
+  trialRegistrationSchema
 } from "@pushgiant/shared";
 import type { ApiConfig } from "./config.js";
 import type { Database } from "./db.js";
@@ -17,6 +19,7 @@ import type { Queues } from "./queues.js";
 import {
   authenticateApiKey,
   createCampaign,
+  createTrialRegistration,
   getProjectOverview,
   listProjectSubscribers,
   markCampaignQueued,
@@ -178,6 +181,23 @@ export function buildServer({ config, database, queues }: ServerDeps) {
     }
 
     return reply.code(202).send({ status: "accepted", ...result });
+  });
+
+  app.post("/v1/trials", async (request, reply) => {
+    const parsed = trialRegistrationSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid_trial", details: parsed.error.flatten() });
+    }
+
+    const vapidKeys = webpush.generateVAPIDKeys();
+    const subject = `mailto:${parsed.data.email.trim().toLowerCase()}`;
+    const trial = await createTrialRegistration(database.pool, cipher, parsed.data, {
+      publicKey: vapidKeys.publicKey,
+      privateKey: vapidKeys.privateKey,
+      subject
+    });
+
+    return reply.code(201).send(trial);
   });
 
   app.get("/v1/projects/:projectId/overview", async (request, reply) => {

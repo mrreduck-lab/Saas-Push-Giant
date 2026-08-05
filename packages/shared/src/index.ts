@@ -97,6 +97,16 @@ export const geoUpdateSchema = z.object({
 
 export type GeoUpdate = z.infer<typeof geoUpdateSchema>;
 
+export const trialRegistrationSchema = z.object({
+  name: z.string().min(1).max(120),
+  email: z.string().email().max(240),
+  company: z.string().min(1).max(160),
+  siteUrl: z.string().url(),
+  password: z.string().min(8).max(200)
+});
+
+export type TrialRegistration = z.infer<typeof trialRegistrationSchema>;
+
 export const campaignCreateSchema = z.object({
   project_id: z.string().uuid(),
   title: z.string().min(1).max(120),

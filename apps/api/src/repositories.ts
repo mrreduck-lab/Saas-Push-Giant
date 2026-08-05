@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { randomBytes } from "node:crypto";
 import { apiKeyPrefix, hashSecret } from "@pushgiant/shared";
 import type {
   CampaignCreate,
@@ -6,7 +7,8 @@ import type {
   EventTrack,
   GeoUpdate,
   SubscriberHeartbeat,
-  SubscriptionUpsert
+  SubscriptionUpsert,
+  TrialRegistration
 } from "@pushgiant/shared";
 
 export type ProjectIdentity = {
@@ -26,6 +28,13 @@ export type ApiKeyIdentity = {
   organization_id: string;
   project_id: string | null;
   scopes: string[];
+};
+
+export type TrialCredentials = {
+  organizationId: string;
+  projectId: string;
+  apiKey: string;
+  trialEndsAt: string;
 };
 
 type SubscriberIdentityPayload = {
@@ -423,6 +432,176 @@ export async function listProjectSubscribers(
   );
 
   return result.rows;
+}
+
+export async function createTrialRegistration(
+  pool: Pool,
+  cipher: DataCipher,
+  payload: TrialRegistration,
+  vapid: { publicKey: string; privateKey: string; subject: string }
+): Promise<TrialCredentials> {
+  const client = await pool.connect();
+  const apiKey = `pg_${randomBytes(32).toString("base64url")}`;
+  const email = payload.email.trim().toLowerCase();
+  const host = new URL(payload.siteUrl).host.toLowerCase();
+
+  try {
+    await client.query("begin");
+
+    const organizationResult = await client.query<{ id: string; trial_ends_at: Date }>(
+      `
+        insert into organizations (
+          name,
+          status,
+          plan,
+          trial_started_at,
+          trial_ends_at,
+          trial_push_limit,
+          trial_push_sent
+        )
+        values ($1, 'active', 'trial', now(), now() + interval '14 days', 100, 0)
+        returning id, trial_ends_at
+      `,
+      [payload.company.trim()]
+    );
+    const organization = organizationResult.rows[0];
+
+    const userResult = await client.query<{ id: string }>(
+      `
+        insert into users (email, name, password_hash)
+        values ($1, $2, $3)
+        on conflict (email) do update set
+          name = coalesce(excluded.name, users.name),
+          password_hash = excluded.password_hash
+        returning id
+      `,
+      [email, payload.name.trim(), hashSecret(`password:${payload.password}`)]
+    );
+    const userId = userResult.rows[0].id;
+
+    await client.query(
+      `
+        insert into organization_members (organization_id, user_id, role)
+        values ($1, $2, 'owner')
+        on conflict (organization_id, user_id) do update set role = excluded.role
+      `,
+      [organization.id, userId]
+    );
+
+    const projectResult = await client.query<{ id: string }>(
+      `
+        insert into projects (organization_id, name, status)
+        values ($1, $2, 'active')
+        returning id
+      `,
+      [organization.id, `${payload.company.trim()} PWA`]
+    );
+    const projectId = projectResult.rows[0].id;
+
+    const domainResult = await client.query<{ id: string }>(
+      `
+        insert into domains (organization_id, project_id, host, status)
+        values ($1, $2, $3, 'pending')
+        returning id
+      `,
+      [organization.id, projectId, host]
+    );
+
+    await client.query(
+      `
+        update projects
+        set default_domain_id = $1, updated_at = now()
+        where id = $2
+      `,
+      [domainResult.rows[0].id, projectId]
+    );
+
+    await client.query(
+      `
+        insert into pwa_configs (
+          project_id,
+          organization_id,
+          name,
+          short_name,
+          description,
+          start_url,
+          scope,
+          theme_color,
+          background_color,
+          icons_json,
+          install_prompt_json
+        )
+        values ($1, $2, $3, $4, $5, '/', '/', '#15120f', '#f5f1ea', '[]'::jsonb, $6::jsonb)
+      `,
+      [
+        projectId,
+        organization.id,
+        payload.company.trim(),
+        payload.company.trim().slice(0, 12) || "PWA",
+        `Trial PWA project for ${host}`,
+        JSON.stringify({
+          title: "Получать уведомления",
+          text: "Новые материалы, акции и важные обновления"
+        })
+      ]
+    );
+
+    await client.query(
+      `
+        insert into vapid_credentials (project_id, organization_id, public_key, private_key_encrypted, subject)
+        values ($1, $2, $3, $4, $5)
+      `,
+      [projectId, organization.id, vapid.publicKey, cipher.encrypt(vapid.privateKey), vapid.subject]
+    );
+
+    await client.query(
+      `
+        insert into api_keys (organization_id, project_id, name, prefix, key_hash, scopes)
+        values ($1, $2, 'Trial admin key', $3, $4, $5)
+      `,
+      [
+        organization.id,
+        projectId,
+        apiKeyPrefix(apiKey),
+        hashSecret(apiKey),
+        ["campaigns:write", "campaigns:send", "analytics:read", "subscribers:read"]
+      ]
+    );
+
+    await client.query(
+      `
+        insert into segments (organization_id, project_id, name, description, definition_json)
+        values
+          ($1, $2, 'All active subscribers', 'Default trial audience', '{"subscription_status":"active"}'::jsonb),
+          ($1, $2, 'Recent subscribers', 'Subscribed or seen in the last 7 days', '{"last_seen_days":7}'::jsonb)
+      `,
+      [organization.id, projectId]
+    );
+
+    await client.query(
+      `
+        insert into integration_connections (organization_id, project_id, kind, name, status, config_json)
+        values
+          ($1, $2, 'wordpress', 'WordPress plugin', 'pending', '{"download":"/downloads/pushgiant-wordpress.zip"}'::jsonb),
+          ($1, $2, 'universal_js', 'Universal JS SDK', 'pending', '{}'::jsonb)
+      `,
+      [organization.id, projectId]
+    );
+
+    await client.query("commit");
+
+    return {
+      organizationId: organization.id,
+      projectId,
+      apiKey,
+      trialEndsAt: organization.trial_ends_at.toISOString()
+    };
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function createCampaign(pool: Pool, apiKey: ApiKeyIdentity, payload: CampaignCreate) {

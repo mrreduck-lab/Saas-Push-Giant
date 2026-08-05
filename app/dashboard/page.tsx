@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { dashboardSections, integrationCards, pricingPlans } from '../product-data';
 
 type Overview = {
   subscribers?: number;
@@ -28,8 +29,6 @@ type Subscriber = {
 type SubscribersResponse = {
   subscribers?: Subscriber[];
 };
-
-const nav = ['Обзор', 'Подписчики', 'Рассылки', 'PWA', 'Интеграции', 'Настройки'];
 
 export default function DashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -130,7 +129,7 @@ export default function DashboardPage() {
     <main className="dashboard">
       <aside>
         <a className="logo" href="/">Push Giant</a>
-        <nav>{nav.map((item) => <a href={`#${item}`} key={item}>{item}</a>)}</nav>
+        <nav>{dashboardSections.map((item) => <a href={`#${item}`} key={item}>{item}</a>)}</nav>
         <div className="project">
           <span>Project</span>
           <strong>Raschini</strong>
@@ -209,12 +208,71 @@ export default function DashboardPage() {
           </div>
         </section>
 
+        <section id="Сегменты" className="panel cards">
+          <h2>Сегменты</h2>
+          {[
+            ['Все активные', 'Подписчики с active endpoint'],
+            ['Новые 7 дней', 'last_seen_at за последнюю неделю'],
+            ['Raschini testers', 'ручной pilot-сегмент для первого запуска']
+          ].map(([title, note]) => (
+            <article key={title}>
+              <strong>{title}</strong>
+              <small>{note}</small>
+            </article>
+          ))}
+        </section>
+
+        <section id="Геопуш" className="panel split">
+          <div>
+            <h2>Геопуш</h2>
+            <p>Работает по последней явной геопозиции пользователя: город, радиус, срок актуальности, согласие на геоданные.</p>
+          </div>
+          <div className="geoBox">
+            <strong>Не фоновый geofence</strong>
+            <span>PWA не отслеживает iOS в фоне. В MVP честно используем last-known location.</span>
+          </div>
+        </section>
+
         <section id="Интеграции" className="panel cards">
           <h2>Интеграции</h2>
-          {['WordPress', 'Bitrix', 'Universal JS'].map((item) => (
-            <article key={item}>
-              <strong>{item}</strong>
-              <small>{item === 'WordPress' ? 'Raschini pilot connector' : 'planned for pilot flow'}</small>
+          {integrationCards.map(([name, status, text]) => (
+            <article key={name}>
+              <strong>{name}</strong>
+              <small>{status} · {text}</small>
+            </article>
+          ))}
+        </section>
+
+        <section id="Аналитика" className="panel cards">
+          <h2>Аналитика</h2>
+          {[
+            ['Accepted', 'кампания принята API'],
+            ['Sent / failed', 'delivery_attempts от worker'],
+            ['Clicked', 'push.open events из service worker']
+          ].map(([title, note]) => (
+            <article key={title}>
+              <strong>{title}</strong>
+              <small>{note}</small>
+            </article>
+          ))}
+        </section>
+
+        <section id="Тариф" className="panel cards">
+          <h2>Тариф</h2>
+          {pricingPlans.slice(0, 3).map((plan) => (
+            <article key={plan.name}>
+              <strong>{plan.name}: {plan.price}</strong>
+              <small>{plan.note}</small>
+            </article>
+          ))}
+        </section>
+
+        <section id="Команда" className="panel cards">
+          <h2>Команда</h2>
+          {['Owner', 'Admin', 'Marketer'].map((role) => (
+            <article key={role}>
+              <strong>{role}</strong>
+              <small>{role === 'Owner' ? 'создаётся при регистрации trial' : 'роль заложена в модели organization_members'}</small>
             </article>
           ))}
         </section>
@@ -269,6 +327,9 @@ export default function DashboardPage() {
         .phone span{color:#c9ad80;text-transform:uppercase;letter-spacing:.16em;font-size:10px}
         .phone strong{font-size:28px;line-height:1;margin:8px 0}
         .phone small{color:#cfc5b8}
+        .geoBox{border-radius:18px;background:#17130f;color:#fff;min-height:180px;padding:22px;display:flex;flex-direction:column;justify-content:flex-end}
+        .geoBox strong{font-size:26px;font-weight:500;line-height:1}
+        .geoBox span{display:block;margin-top:10px;color:#cfc5b8;line-height:1.45}
         .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
         .cards h2{grid-column:1/-1}
         code{display:block;background:#17130f;color:#f8f3ea;border-radius:8px;padding:18px;white-space:pre-wrap}
