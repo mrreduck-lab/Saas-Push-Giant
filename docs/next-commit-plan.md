@@ -61,7 +61,7 @@ Implementation was started after approval:
 
 ## Sprint 1 Commit 2
 
-Status: in progress
+Status: implemented
 
 Goal: turn the placeholder two-project model into a real lightweight project selector.
 
