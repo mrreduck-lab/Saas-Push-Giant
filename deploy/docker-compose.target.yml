@@ -5,6 +5,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/docker/admin.Dockerfile
+      args:
+        NEXT_PUBLIC_GIT_SHA: ${NEXT_PUBLIC_GIT_SHA:-local}
     env_file:
       - ${PUSHGIANT_ENV_FILE:?PUSHGIANT_ENV_FILE is required}
     depends_on:

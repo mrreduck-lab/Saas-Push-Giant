@@ -38,6 +38,7 @@ jobs:
             git reset --hard origin/main
 
             export PUSHGIANT_ENV_FILE="$(readlink -f ../.env)"
+            export NEXT_PUBLIC_GIT_SHA="${{ github.sha }}"
             test -f "$PUSHGIANT_ENV_FILE"
             COMPOSE="docker compose --env-file $PUSHGIANT_ENV_FILE -p pushgiant -f deploy/docker-compose.target.yml"
 

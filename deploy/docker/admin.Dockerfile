@@ -1,5 +1,7 @@
 FROM node:20-alpine
 WORKDIR /app
+ARG NEXT_PUBLIC_GIT_SHA=local
+ENV NEXT_PUBLIC_GIT_SHA=$NEXT_PUBLIC_GIT_SHA
 
 COPY package.json package-lock.json next.config.mjs tsconfig.json next-env.d.ts ./
 COPY apps/api/package.json apps/api/package.json

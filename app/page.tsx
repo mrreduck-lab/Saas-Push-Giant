@@ -32,6 +32,8 @@ const launchSteps = [
   "Первая push-рассылка"
 ];
 
+const buildSha = process.env.NEXT_PUBLIC_GIT_SHA?.slice(0, 7) ?? "local";
+
 export default function PushGiantHome() {
   return (
     <main className="pg">
@@ -138,7 +140,10 @@ export default function PushGiantHome() {
       </section>
 
       <footer className="pgFooter">
-        <strong>Push Giant</strong>
+        <div>
+          <strong>Push Giant</strong>
+          <small>main {buildSha}</small>
+        </div>
         <nav>
           <a href="/register">Регистрация</a>
           <a href="/pricing">Тарифы</a>
