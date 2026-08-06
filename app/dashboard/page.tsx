@@ -47,6 +47,7 @@ export default function DashboardPage() {
   const [testMessage, setTestMessage] = useState<string | null>(null);
   const [isStandalonePwa, setIsStandalonePwa] = useState(false);
   const [pwaModeChecked, setPwaModeChecked] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -156,6 +157,21 @@ export default function DashboardPage() {
     setSendState('sent');
     setSendMessage(`Кампания поставлена в очередь: ${data.id ?? 'accepted'}`);
     event.currentTarget.reset();
+  }
+
+  function openConsentStep() {
+    setTestMessage(null);
+
+    if (!isRunningAsInstalledPwa()) {
+      setIsStandalonePwa(false);
+      setPwaModeChecked(true);
+      setTestState('failed');
+      setTestMessage('Сначала добавьте сайт на экран Домой и откройте Push Giant с иконки. Потом тестовый push будет честно проверять PWA, а не вкладку браузера.');
+      return;
+    }
+
+    setShowConsent(true);
+    setTestState('idle');
   }
 
   async function runOneShotTest() {
@@ -270,6 +286,25 @@ export default function DashboardPage() {
           </section>
         ) : null}
 
+        <section className="panel projectMode">
+          <div>
+            <p className="eyebrow">Project model</p>
+            <h2>Два сценария в одном кабинете</h2>
+          </div>
+          <div className="projectCards">
+            <article className="activeProject">
+              <span>активно сейчас</span>
+              <strong>Push Giant test</strong>
+              <small>Безопасный self-test: временная `pg_test_*` подписка, один push, затем сброс.</small>
+            </article>
+            <article>
+              <span>следующий шаг</span>
+              <strong>Client production</strong>
+              <small>Боевой проект сайта клиента: домен, PWA-настройки, реальные подписчики и кампании.</small>
+            </article>
+          </div>
+        </section>
+
         <section id="Обзор" className="panel overview">
           <h2>Обзор</h2>
           <div className="metrics">
@@ -280,6 +315,34 @@ export default function DashboardPage() {
                 <small>{note}</small>
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className="panel installGuide">
+          <div>
+            <p className="eyebrow">Install flow</p>
+            <h2>Как проверить PWA на телефоне</h2>
+            <p>
+              Откройте сайт с телефона, добавьте Push Giant на экран Домой и вернитесь в кабинет уже из иконки.
+              На iPhone push не тестируется из обычной Safari-вкладки.
+            </p>
+          </div>
+          <div className="guideSteps">
+            <article>
+              <span>iPhone</span>
+              <strong>Поделиться, затем На экран Домой</strong>
+              <small>После добавления закройте Safari и откройте Push Giant с новой иконки.</small>
+            </article>
+            <article>
+              <span>Android</span>
+              <strong>Меню браузера, затем Установить приложение</strong>
+              <small>Если браузер покажет install prompt, подтвердите установку и откройте PWA.</small>
+            </article>
+            <article>
+              <span>Permission</span>
+              <strong>Согласие, системный popup, push</strong>
+              <small>Сначала показываем текст согласия, затем браузерный запрос на уведомления.</small>
+            </article>
           </div>
         </section>
 
@@ -304,11 +367,13 @@ export default function DashboardPage() {
             <small>{isStandalonePwa ? 'без сохранения активной тестовой аудитории' : 'сначала запуск с экрана Домой'}</small>
             <button
               type="button"
-              onClick={runOneShotTest}
-              disabled={!isStandalonePwa || testState === 'requesting' || testState === 'sending'}
+              onClick={openConsentStep}
+              disabled={!isStandalonePwa || showConsent || testState === 'requesting' || testState === 'sending'}
             >
               {!isStandalonePwa
                 ? 'Откройте PWA'
+                : showConsent
+                  ? 'Подтвердите согласие'
                 : testState === 'requesting'
                   ? 'Готовим...'
                   : testState === 'sending'
@@ -438,6 +503,26 @@ export default function DashboardPage() {
         </section>
       </section>
 
+      {showConsent ? (
+        <div className="consentOverlay" role="dialog" aria-modal="true" aria-labelledby="push-consent-title">
+          <section className="consentModal">
+            <p className="eyebrow">Consent</p>
+            <h2 id="push-consent-title">Согласие на тестовое уведомление</h2>
+            <p>
+              Вы разрешаете Push Giant отправить одно тестовое push-уведомление на это устройство,
+              чтобы проверить работу установленного PWA. Подписка создаётся только для проверки,
+              не попадает в боевую аудиторию и будет сброшена сразу после отправки.
+            </p>
+            <div className="consentActions">
+              <button type="button" onClick={() => setShowConsent(false)}>Отмена</button>
+              <button type="button" onClick={() => { setShowConsent(false); void runOneShotTest(); }}>
+                Согласен, показать системный запрос
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       <style jsx>{`
         .dashboard{min-height:100svh;display:grid;grid-template-columns:260px 1fr;background:#f4f1ec;color:#15120f;font-family:var(--font-sans),Arial,sans-serif}
         aside{position:sticky;top:0;height:100svh;padding:28px 22px;background:#17130f;color:#f8f3ea;display:flex;flex-direction:column}
@@ -460,6 +545,13 @@ export default function DashboardPage() {
         .eyebrow{margin:0 0 8px;text-transform:uppercase;letter-spacing:.18em;font-size:10px;color:#a98d66}
         h2{margin:0 0 18px;font-family:var(--font-display),Georgia,serif;font-weight:400;font-size:34px}
         .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+        .projectMode{display:grid;grid-template-columns:minmax(220px,.65fr) 1fr;gap:18px;align-items:start}
+        .projectCards,.guideSteps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+        .projectCards{grid-template-columns:1fr 1fr}
+        .projectCards article,.guideSteps article{min-height:150px}
+        .projectCards span,.guideSteps span{text-transform:uppercase;letter-spacing:.16em;font-size:10px;color:#a98d66}
+        .projectCards strong,.guideSteps strong{font-size:24px;line-height:1.05}
+        .activeProject{border-color:rgba(169,141,102,.6);box-shadow:inset 0 0 0 1px rgba(169,141,102,.18)}
         article{border:1px solid rgba(21,18,15,.1);border-radius:8px;padding:16px;background:#fff}
         article span{display:block;font-size:12px;color:#7b6d5e}
         article strong{display:block;margin-top:10px;font-size:28px;font-weight:500}
@@ -480,6 +572,8 @@ export default function DashboardPage() {
         .send{margin-top:16px;border-radius:8px;padding:12px;background:#f0eadf;color:#4d4338}
         .send.sent{background:#e6f3e8;color:#285634}
         .send.failed{background:#fff0ea;color:#873c2c}
+        .installGuide{display:grid;gap:18px}
+        .installGuide p{margin:0;color:#62574c;line-height:1.55}
         form{display:grid;gap:10px}
         input,textarea{border:1px solid rgba(21,18,15,.15);background:#fff;border-radius:6px;padding:12px;font:14px inherit}
         textarea{min-height:96px;resize:vertical}
@@ -493,7 +587,13 @@ export default function DashboardPage() {
         .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
         .cards h2{grid-column:1/-1}
         code{display:block;background:#17130f;color:#f8f3ea;border-radius:8px;padding:18px;white-space:pre-wrap}
-        @media(max-width:880px){.dashboard{grid-template-columns:1fr}aside{position:static;height:auto}.metrics,.cards,.split{grid-template-columns:1fr}.table{grid-template-columns:1fr}.table span{border-right:0}.topline{display:grid}}
+        .consentOverlay{position:fixed;inset:0;z-index:50;background:rgba(12,10,8,.62);display:grid;place-items:center;padding:18px}
+        .consentModal{width:min(560px,100%);background:#fffaf3;color:#15120f;border-radius:8px;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.28)}
+        .consentModal h2{font-size:38px}
+        .consentModal p:not(.eyebrow){margin:0;color:#62574c;line-height:1.58}
+        .consentActions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:22px}
+        .consentActions button:first-child{background:#fffaf3;color:#17130f;border-color:rgba(21,18,15,.22)}
+        @media(max-width:880px){.dashboard{grid-template-columns:1fr}aside{position:static;height:auto}.metrics,.cards,.split,.projectMode,.projectCards,.guideSteps{grid-template-columns:1fr}.table{grid-template-columns:1fr}.table span{border-right:0}.topline{display:grid}}
       `}</style>
     </main>
   );

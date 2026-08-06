@@ -22,6 +22,14 @@
 .pgConsole b{display:block;margin-bottom:8px;color:#d8c29e}
 .pg code{font-size:12px;color:#e7dfd2;white-space:normal}
 .pgBand,.pgSplit{padding:58px clamp(18px,4vw,62px);border-top:1px solid rgba(21,18,15,.1)}
+.pgInstallTest{display:grid;grid-template-columns:minmax(0,.8fr) minmax(320px,1.2fr);gap:34px;padding:58px clamp(18px,4vw,62px);border-top:1px solid rgba(21,18,15,.1);background:#ebe3d6}
+.pgInstallIntro{align-self:start;position:sticky;top:104px}
+.pgInstallIntro p:not(.pgKicker){font-size:17px;line-height:1.58;color:#5d5247;max-width:640px;margin:22px 0 0}
+.pgInstallSteps{display:grid;grid-template-columns:1fr;gap:10px}
+.pgInstallSteps article{background:#fffaf3;border:1px solid rgba(21,18,15,.1);border-radius:8px;padding:20px;min-height:128px}
+.pgInstallSteps span{display:inline-flex;width:32px;height:32px;align-items:center;justify-content:center;border-radius:999px;background:#17130f;color:#f8f1e6;font-size:12px}
+.pgInstallSteps strong{display:block;margin-top:16px;font-size:24px;font-weight:500}
+.pgInstallSteps small{display:block;margin-top:8px;color:#65594d;line-height:1.5}
 .pgSteps{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;margin-top:32px;background:rgba(21,18,15,.12)}
 .pgSteps article,.pgGrid article,.pgPricing article{background:#fffaf3;padding:22px;min-height:150px}
 .pgSteps span{font-size:11px;color:#95744d}
@@ -42,5 +50,5 @@
 .pgFooter strong{font-family:var(--font-display);font-size:26px;font-weight:500}
 .pgFooter small{display:block;margin-top:8px;font-size:11px;letter-spacing:.08em;color:rgba(248,241,230,.52)}
 .pgFooter nav{color:#d3c7b8}
-@media(max-width:980px){.pgHero,.pgSplit{grid-template-columns:1fr}.pgSteps,.pgGrid,.pgPricing{grid-template-columns:1fr 1fr}.pgHeader{grid-template-columns:1fr}.pgHeader nav{order:3}.pgHeaderCta{width:max-content}}
+@media(max-width:980px){.pgHero,.pgSplit,.pgInstallTest{grid-template-columns:1fr}.pgInstallIntro{position:static}.pgSteps,.pgGrid,.pgPricing{grid-template-columns:1fr 1fr}.pgHeader{grid-template-columns:1fr}.pgHeader nav{order:3}.pgHeaderCta{width:max-content}}
 @media(max-width:620px){.pgHero{padding-top:44px}.pgSteps,.pgGrid,.pgPricing,.pgIntegrations{grid-template-columns:1fr}.pg h1{font-size:15vw}.pgFooter{display:grid}.pgChecklist{grid-template-columns:1fr}}

@@ -2,7 +2,7 @@
 
 Status: living specification  
 Last updated: 2026-08-06  
-Current deployed main at time of update: `fca206a`
+Baseline deployed main before Sprint 1 Commit 1: `85be751`
 
 ## Product Thesis
 
@@ -98,4 +98,3 @@ Not included yet:
 - Full CDP.
 
 These can stay in the roadmap, but the first release should sell a simple and credible result: installed PWA plus a working push channel.
-

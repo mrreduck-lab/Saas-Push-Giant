@@ -1,7 +1,7 @@
 # Next Commit Plan
 
 Last updated: 2026-08-06  
-Status: proposed, awaiting approval
+Status: approved and implemented in Sprint 1 Commit 1
 
 ## Commit Goal
 
@@ -15,13 +15,11 @@ This is the strongest near-term proof of value. A future client should feel the 
 
 ## Scope
 
-Files likely to change:
+Files changed:
 
 - `app/page.tsx`
-- `app/globals.css` or page-scoped CSS
+- `app/marketing.css`
 - `app/dashboard/page.tsx`
-- possibly `app/register/page.tsx`
-- possibly `app/product-data.ts`
 
 Implementation tasks:
 
@@ -57,7 +55,15 @@ Implementation tasks:
 
 ## Approval Phrase
 
-To start implementation, approve:
+Implementation was started after approval:
 
 `Подтверждаю Sprint 1 Commit 1: делай install-and-test PWA usecase`
 
+## Next Proposed Commit
+
+Sprint 1 Commit 2 should turn the placeholder two-project model into a real lightweight project selector:
+
+- keep `Push Giant test` as a server-owned safe demo project;
+- persist a client trial project after registration;
+- route dashboard context by selected project;
+- keep one-shot test traffic separate from real subscribers.

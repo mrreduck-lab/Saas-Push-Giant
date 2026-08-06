@@ -27,6 +27,8 @@ Remaining:
 
 ## Sprint 1 - Buyer Demo And PWA Test
 
+Status: in progress; Commit 1 implements the install-and-test public flow.
+
 Goal: make the first screen explain the product and let a future client test a real PWA push on their phone.
 
 Deliverables:
@@ -111,4 +113,3 @@ Deliverables:
 | Stage 3 Wallet | Apple Wallet, Google Wallet, loyalty cards, coupons, OSMI connector |
 | Stage 4 App builder | Android/iOS generation, APNs, FCM, unified app dashboard |
 | Stage 5 Marketing automation | CDP, timeline, AI segmentation, AI recommendations, AI push generation |
-

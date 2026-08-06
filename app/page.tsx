@@ -32,6 +32,14 @@ const launchSteps = [
   "Первая push-рассылка"
 ];
 
+const installSteps = [
+  ["1", "Откройте с телефона", "Начните с регистрации или demo-кабинета, чтобы увидеть сценарий как будущий клиент."],
+  ["2", "Добавьте на экран Домой", "iPhone: Поделиться -> На экран Домой. Android: меню браузера -> Установить приложение."],
+  ["3", "Запустите с иконки", "Для iPhone push работает только в установленном PWA, а не в обычной Safari-вкладке."],
+  ["4", "Разрешите уведомления", "Сначала покажем понятный текст согласия, потом появится стандартный системный popup."],
+  ["5", "Отправьте push себе", "Кабинет создаст временную тестовую подписку, отправит один push и сразу сбросит её."]
+];
+
 const buildSha = process.env.NEXT_PUBLIC_GIT_SHA?.slice(0, 7) ?? "local";
 
 export default function PushGiantHome() {
@@ -59,7 +67,7 @@ export default function PushGiantHome() {
             без переписывания существующего сайта.
           </p>
           <div className="pgActions">
-            <a className="pgPrimary" href="/register">Создать trial</a>
+            <a className="pgPrimary" href="#install-test">Установить и протестировать</a>
             <a href="/dashboard">Открыть кабинет</a>
             <a href="/downloads/pushgiant-wordpress.zip">Скачать WordPress ZIP</a>
           </div>
@@ -72,6 +80,31 @@ export default function PushGiantHome() {
             <b>readyz</b>
             <code>{`{"database":true,"redis":true}`}</code>
           </div>
+        </div>
+      </section>
+
+      <section id="install-test" className="pgInstallTest">
+        <div className="pgInstallIntro">
+          <p className="pgKicker">Install and test</p>
+          <h2>PWA показывает бизнесу эффект до интеграции</h2>
+          <p>
+            PWA превращает сайт в приложение на экране телефона: пользователь открывает его с иконки,
+            остаётся в брендированном интерфейсе и может получать web push без App Store и Google Play.
+            Для бизнеса это быстрый канал повторных касаний, возврата клиентов и персональных предложений.
+          </p>
+          <div className="pgActions">
+            <a className="pgPrimary" href="/register?flow=install-test">Регистрация и тест</a>
+            <a href="/dashboard?flow=install-test">Открыть demo кабинет</a>
+          </div>
+        </div>
+        <div className="pgInstallSteps">
+          {installSteps.map(([number, title, text]) => (
+            <article key={number}>
+              <span>{number}</span>
+              <strong>{title}</strong>
+              <small>{text}</small>
+            </article>
+          ))}
         </div>
       </section>
 
