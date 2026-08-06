@@ -282,7 +282,7 @@ export function buildServer({ config, database, queues }: ServerDeps) {
         projectId: campaign.project_id,
         organizationId: campaign.organization_id
       },
-      { jobId: `campaign:${campaignId}` }
+      { jobId: `campaign-${campaignId}` }
     );
 
     return reply.code(202).send({ id: campaignId, status: campaign.status });

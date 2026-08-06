@@ -150,7 +150,7 @@ export default function DashboardPage() {
 
     if (!response.ok) {
       setSendState('failed');
-      setSendMessage(data.error ?? `send_failed_${response.status}`);
+      setSendMessage(readPlatformError(data, `send_failed_${response.status}`));
       return;
     }
 
@@ -230,7 +230,7 @@ export default function DashboardPage() {
           subscription: subscription.toJSON(),
           title: 'Push Giant работает',
           body: 'Это тестовое уведомление. Подписка уже сброшена, повторной рассылки не будет.',
-          url: '/',
+          url: new URL('/', window.location.origin).toString(),
           platform: navigator.platform,
           browser: detectBrowser(navigator.userAgent),
           userAgent: navigator.userAgent,
@@ -242,7 +242,7 @@ export default function DashboardPage() {
       const sendData = await sendResponse.json().catch(() => ({}));
 
       if (!sendResponse.ok) {
-        throw new Error(sendData.error ?? `test_send_failed_${sendResponse.status}`);
+        throw new Error(readPlatformError(sendData, `test_send_failed_${sendResponse.status}`));
       }
 
       await subscription.unsubscribe().catch(() => false);
@@ -614,6 +614,35 @@ function SubscriberRow({ subscriber }: { subscriber: Subscriber }) {
 function formatNumber(value?: number) {
   if (typeof value !== 'number') return '0';
   return new Intl.NumberFormat('ru-RU').format(value);
+}
+
+function readPlatformError(data: unknown, fallback: string) {
+  if (!data || typeof data !== 'object') return fallback;
+  const payload = data as {
+    error?: unknown;
+    message?: unknown;
+    status?: unknown;
+    detail?: {
+      error?: unknown;
+      message?: unknown;
+      status?: unknown;
+      provider_status_code?: unknown;
+    };
+  };
+  const detail = payload.detail && typeof payload.detail === 'object' ? payload.detail : null;
+  const providerStatus = detail?.provider_status_code ? ` provider=${detail.provider_status_code}` : '';
+  const message = detail?.message ?? detail?.error ?? payload.message ?? payload.error;
+  const status = detail?.status ?? payload.status;
+
+  if (typeof message === 'string') {
+    return status ? `${message} (${status}${providerStatus})` : `${message}${providerStatus}`;
+  }
+
+  if (typeof payload.error === 'string') {
+    return status ? `${payload.error} (${status}${providerStatus})` : `${payload.error}${providerStatus}`;
+  }
+
+  return fallback;
 }
 
 function detectBrowser(userAgent: string) {

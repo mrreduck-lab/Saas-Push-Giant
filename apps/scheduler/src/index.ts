@@ -79,7 +79,7 @@ async function queueDueCampaigns(): Promise<DueCampaign[]> {
         projectId: campaign.project_id,
         organizationId: campaign.organization_id
       },
-      { jobId: `campaign:${campaign.id}` }
+      { jobId: `campaign-${campaign.id}` }
     )
   ));
 
