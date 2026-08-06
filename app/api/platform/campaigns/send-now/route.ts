@@ -9,7 +9,7 @@ type CampaignPayload = {
 };
 
 export async function POST(request: Request) {
-  const env = loadPlatformEnv();
+  const env = loadPlatformEnv(request);
   if (!env.ok) {
     return Response.json(env.error, { status: 503 });
   }
@@ -54,5 +54,5 @@ export async function POST(request: Request) {
   return platformFetch(`/v1/campaigns/${campaign.id}/send-now`, {
     method: "POST",
     body: JSON.stringify({})
-  });
+  }, request);
 }

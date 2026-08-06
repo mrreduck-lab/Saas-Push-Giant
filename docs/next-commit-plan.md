@@ -59,11 +59,20 @@ Implementation was started after approval:
 
 `Подтверждаю Sprint 1 Commit 1: делай install-and-test PWA usecase`
 
-## Next Proposed Commit
+## Sprint 1 Commit 2
 
-Sprint 1 Commit 2 should turn the placeholder two-project model into a real lightweight project selector:
+Status: in progress
+
+Goal: turn the placeholder two-project model into a real lightweight project selector.
 
 - keep `Push Giant test` as a server-owned safe demo project;
 - persist a client trial project after registration;
 - route dashboard context by selected project;
 - keep one-shot test traffic separate from real subscribers.
+
+Implementation notes:
+
+- `/register` stores the trial project in local browser storage after Core API creates it.
+- `/dashboard?project=production` opens the saved client trial project when present.
+- Dashboard overview, subscribers, and campaign send can use the selected trial project credentials.
+- The one-shot PWA self-test remains on the server-owned demo project.

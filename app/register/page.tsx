@@ -8,6 +8,15 @@ type TrialState =
   | { status: "success"; result: { organizationId: string; projectId: string; apiKey: string; trialEndsAt: string } }
   | { status: "error"; message: string };
 
+type TrialResult = {
+  organizationId: string;
+  projectId: string;
+  apiKey: string;
+  trialEndsAt: string;
+};
+
+const TRIAL_PROJECT_STORAGE_KEY = "pushgiant.trialProject.v1";
+
 export default function RegisterPage() {
   const [state, setState] = useState<TrialState>({ status: "idle" });
 
@@ -34,7 +43,12 @@ export default function RegisterPage() {
       return;
     }
 
-    setState({ status: "success", result: data });
+    const result = data as TrialResult;
+    saveTrialProject(result, {
+      company: String(form.get("company") ?? ""),
+      siteUrl: String(form.get("siteUrl") ?? "")
+    });
+    setState({ status: "success", result });
     event.currentTarget.reset();
   }
 
@@ -63,7 +77,7 @@ export default function RegisterPage() {
           <div><span>Project ID</span><code>{state.result.projectId}</code></div>
           <div><span>API key</span><code>{state.result.apiKey}</code></div>
           <div><span>Trial до</span><code>{new Date(state.result.trialEndsAt).toLocaleString("ru-RU")}</code></div>
-          <a href="/dashboard">Открыть кабинет</a>
+          <a href="/dashboard?project=production">Открыть кабинет</a>
           <a href="/downloads/pushgiant-wordpress.zip">Скачать WordPress plugin</a>
         </aside>
       ) : null}
@@ -85,4 +99,18 @@ export default function RegisterPage() {
       `}</style>
     </main>
   );
+}
+
+function saveTrialProject(result: TrialResult, input: { company: string; siteUrl: string }) {
+  if (typeof window === "undefined") return;
+
+  window.localStorage.setItem(TRIAL_PROJECT_STORAGE_KEY, JSON.stringify({
+    label: input.company.trim() || "Client production",
+    siteUrl: input.siteUrl.trim(),
+    organizationId: result.organizationId,
+    projectId: result.projectId,
+    apiKey: result.apiKey,
+    trialEndsAt: result.trialEndsAt,
+    savedAt: new Date().toISOString()
+  }));
 }

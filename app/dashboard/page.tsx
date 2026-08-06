@@ -36,6 +36,19 @@ type TestConfig = {
   serviceWorkerPath: string;
 };
 
+type ProjectMode = 'test' | 'production';
+
+type TrialProject = {
+  label: string;
+  siteUrl?: string;
+  organizationId: string;
+  projectId: string;
+  apiKey: string;
+  trialEndsAt: string;
+};
+
+const TRIAL_PROJECT_STORAGE_KEY = 'pushgiant.trialProject.v1';
+
 export default function DashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
@@ -48,6 +61,27 @@ export default function DashboardPage() {
   const [isStandalonePwa, setIsStandalonePwa] = useState(false);
   const [pwaModeChecked, setPwaModeChecked] = useState(false);
   const [showConsent, setShowConsent] = useState(false);
+  const [projectMode, setProjectMode] = useState<ProjectMode>('test');
+  const [trialProject, setTrialProject] = useState<TrialProject | null>(null);
+
+  useEffect(() => {
+    const storedProject = readStoredTrialProject();
+    setTrialProject(storedProject);
+
+    if (storedProject && new URLSearchParams(window.location.search).get('project') === 'production') {
+      setProjectMode('production');
+    }
+  }, []);
+
+  const activeProject = projectMode === 'production' && trialProject ? trialProject : null;
+  const projectHeaders = useMemo(() => {
+    if (!activeProject) return undefined;
+
+    return {
+      'x-pushgiant-project-id': activeProject.projectId,
+      'x-pushgiant-api-key': activeProject.apiKey
+    };
+  }, [activeProject]);
 
   useEffect(() => {
     let ignore = false;
@@ -58,8 +92,8 @@ export default function DashboardPage() {
 
       try {
         const [overviewResponse, subscribersResponse] = await Promise.all([
-          fetch('/api/platform/overview', { cache: 'no-store' }),
-          fetch('/api/platform/subscribers', { cache: 'no-store' })
+          fetch('/api/platform/overview', { cache: 'no-store', headers: projectHeaders }),
+          fetch('/api/platform/subscribers', { cache: 'no-store', headers: projectHeaders })
         ]);
 
         if (!overviewResponse.ok) {
@@ -95,7 +129,7 @@ export default function DashboardPage() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [projectHeaders]);
 
   useEffect(() => {
     const displayModeQueries = [
@@ -129,6 +163,23 @@ export default function DashboardPage() {
     ['Статус сайта', overview?.site_status ?? 'pending', 'domain verification']
   ], [overview]);
 
+  const activeProjectLabel = activeProject?.label || 'Push Giant test';
+  const activeProjectNote = activeProject
+    ? `${activeProject.siteUrl || 'trial project'} · trial до ${formatDate(activeProject.trialEndsAt)}`
+    : 'safe demo project';
+
+  function chooseProject(nextMode: ProjectMode) {
+    if (nextMode === 'production' && !trialProject) {
+      setProjectMode('test');
+      setError('Сначала создайте trial-проект, потом кабинет сможет переключиться на Client production.');
+      return;
+    }
+
+    setProjectMode(nextMode);
+    setSendMessage(null);
+    setError(null);
+  }
+
   async function sendCampaign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -138,7 +189,10 @@ export default function DashboardPage() {
 
     const response = await fetch('/api/platform/campaigns/send-now', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...projectHeaders
+      },
       body: JSON.stringify({
         title: form.get('title'),
         body: form.get('body'),
@@ -265,8 +319,8 @@ export default function DashboardPage() {
         <nav>{dashboardSections.map((item) => <a href={`#${item}`} key={item}>{item}</a>)}</nav>
         <div className="project">
           <span>Project</span>
-          <strong>Demo project</strong>
-          <small>{loading ? 'loading API' : error ? 'API attention needed' : 'live API connected'}</small>
+          <strong>{activeProjectLabel}</strong>
+          <small>{loading ? 'loading API' : error ? 'API attention needed' : activeProjectNote}</small>
         </div>
       </aside>
 
@@ -292,15 +346,25 @@ export default function DashboardPage() {
             <h2>Два сценария в одном кабинете</h2>
           </div>
           <div className="projectCards">
-            <article className="activeProject">
-              <span>активно сейчас</span>
+            <article className={projectMode === 'test' ? 'activeProject' : ''}>
+              <span>{projectMode === 'test' ? 'активно сейчас' : 'safe demo'}</span>
               <strong>Push Giant test</strong>
               <small>Безопасный self-test: временная `pg_test_*` подписка, один push, затем сброс.</small>
+              <button type="button" onClick={() => chooseProject('test')}>Выбрать test</button>
             </article>
-            <article>
-              <span>следующий шаг</span>
-              <strong>Client production</strong>
-              <small>Боевой проект сайта клиента: домен, PWA-настройки, реальные подписчики и кампании.</small>
+            <article className={projectMode === 'production' ? 'activeProject' : ''}>
+              <span>{projectMode === 'production' ? 'активно сейчас' : 'trial project'}</span>
+              <strong>{trialProject?.label || 'Client production'}</strong>
+              <small>
+                {trialProject
+                  ? `${trialProject.siteUrl || 'Боевой сайт клиента'} · API key сохранён после регистрации trial.`
+                  : 'Создайте trial, чтобы получить проект, API key и отдельный production-контекст.'}
+              </small>
+              {trialProject ? (
+                <button type="button" onClick={() => chooseProject('production')}>Выбрать production</button>
+              ) : (
+                <a href="/register">Создать trial</a>
+              )}
             </article>
           </div>
         </section>
@@ -400,7 +464,10 @@ export default function DashboardPage() {
         <section id="Рассылки" className="panel split">
           <div>
             <h2>Рассылки</h2>
-            <p>Создаёт кампанию в API и сразу ставит её в очередь BullMQ для отправки.</p>
+            <p>
+              Создаёт кампанию в API и сразу ставит её в очередь BullMQ для отправки.
+              Сейчас активен проект: {activeProjectLabel}.
+            </p>
             {sendMessage ? <div className={`send ${sendState}`}>{sendMessage}</div> : null}
           </div>
           <form onSubmit={sendCampaign}>
@@ -416,12 +483,12 @@ export default function DashboardPage() {
         <section id="PWA" className="panel split">
           <div>
             <h2>PWA</h2>
-            <p>Название, иконка, цвет, start URL, manifest, service worker и инструкция установки.</p>
+            <p>Название, иконка, цвет, start URL, manifest, service worker и инструкция установки для активного проекта.</p>
           </div>
           <div className="phone">
-            <span>Demo project</span>
+            <span>{projectMode === 'production' ? 'Client production' : 'Demo project'}</span>
             <strong>Add to Home Screen</strong>
-            <small>manifest + service worker pilot</small>
+            <small>{activeProject?.siteUrl || 'manifest + service worker pilot'}</small>
           </div>
         </section>
 
@@ -499,7 +566,9 @@ export default function DashboardPage() {
             <h2>Настройки</h2>
             <p>Project ID, API key, домены, VAPID, trial и диагностика подключения сайта.</p>
           </div>
-          <code>API key hidden in server env</code>
+          <code>{activeProject
+            ? `Project ID: ${activeProject.projectId}\nAPI key: ${maskApiKey(activeProject.apiKey)}\nTrial ends: ${formatDate(activeProject.trialEndsAt)}`
+            : 'API key hidden in server env'}</code>
         </section>
       </section>
 
@@ -551,6 +620,7 @@ export default function DashboardPage() {
         .projectCards article,.guideSteps article{min-height:150px}
         .projectCards span,.guideSteps span{text-transform:uppercase;letter-spacing:.16em;font-size:10px;color:#a98d66}
         .projectCards strong,.guideSteps strong{font-size:24px;line-height:1.05}
+        .projectCards button,.projectCards a{display:inline-flex;width:max-content;margin-top:14px;border-radius:6px;padding:10px 12px;border:1px solid #17130f;background:#17130f;color:#fff;font-size:12px}
         .activeProject{border-color:rgba(169,141,102,.6);box-shadow:inset 0 0 0 1px rgba(169,141,102,.18)}
         article{border:1px solid rgba(21,18,15,.1);border-radius:8px;padding:16px;background:#fff}
         article span{display:block;font-size:12px;color:#7b6d5e}
@@ -614,6 +684,42 @@ function SubscriberRow({ subscriber }: { subscriber: Subscriber }) {
 function formatNumber(value?: number) {
   if (typeof value !== 'number') return '0';
   return new Intl.NumberFormat('ru-RU').format(value);
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('ru-RU');
+}
+
+function maskApiKey(value: string) {
+  if (value.length <= 12) return 'hidden';
+  return `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function readStoredTrialProject(): TrialProject | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.localStorage.getItem(TRIAL_PROJECT_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<TrialProject>;
+    if (!parsed.projectId || !parsed.apiKey || !parsed.organizationId || !parsed.trialEndsAt) {
+      return null;
+    }
+
+    return {
+      label: parsed.label || 'Client production',
+      siteUrl: parsed.siteUrl,
+      organizationId: parsed.organizationId,
+      projectId: parsed.projectId,
+      apiKey: parsed.apiKey,
+      trialEndsAt: parsed.trialEndsAt
+    };
+  } catch {
+    return null;
+  }
 }
 
 function readPlatformError(data: unknown, fallback: string) {

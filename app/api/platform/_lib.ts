@@ -6,10 +6,24 @@ export type PlatformError = {
   status?: number;
 };
 
-export function loadPlatformEnv() {
+type PlatformRequest = {
+  headers: {
+    get(name: string): string | null;
+  };
+};
+
+function cleanHeaderValue(value: string | null) {
+  const trimmed = value?.trim();
+  return trimmed || undefined;
+}
+
+export function loadPlatformEnv(request?: PlatformRequest) {
   const apiUrl = (process.env.PUSHGIANT_API_URL ?? process.env.API_URL ?? DEFAULT_API_URL).replace(/\/$/, "");
-  const projectId = process.env.PUSHGIANT_PROJECT_ID ?? process.env.NEXT_PUBLIC_PUSHGIANT_PROJECT_ID;
-  const apiKey = process.env.PUSHGIANT_API_KEY;
+  const projectId = cleanHeaderValue(request?.headers.get("x-pushgiant-project-id") ?? null)
+    ?? process.env.PUSHGIANT_PROJECT_ID
+    ?? process.env.NEXT_PUBLIC_PUSHGIANT_PROJECT_ID;
+  const apiKey = cleanHeaderValue(request?.headers.get("x-pushgiant-api-key") ?? null)
+    ?? process.env.PUSHGIANT_API_KEY;
 
   if (!projectId || !apiKey) {
     return {
@@ -29,8 +43,8 @@ export function loadPlatformEnv() {
   };
 }
 
-export async function platformFetch(path: string, init?: RequestInit) {
-  const env = loadPlatformEnv();
+export async function platformFetch(path: string, init?: RequestInit, request?: PlatformRequest) {
+  const env = loadPlatformEnv(request);
   if (!env.ok) {
     return Response.json(env.error, { status: 503 });
   }
