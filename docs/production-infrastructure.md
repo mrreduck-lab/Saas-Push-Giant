@@ -1,6 +1,6 @@
 # Push Giant Production Infrastructure
 
-Last verified: 2026-07-31 07:57 MSK
+Last verified: 2026-08-06
 
 Status: **live production infrastructure**
 
@@ -335,7 +335,7 @@ DEPLOY_ENABLED=true
 
 The SSH private key must never be stored in the repository. The corresponding public key must be restricted to the `deploy` account on the server.
 
-Current status: the production server and application are live; GitHub Actions automatic deployment still requires final secret/variable configuration and an end-to-end deployment test from a new commit.
+Current status: the production server and application are live; GitHub Actions automatic deployment from `main` has been verified end to end. The public footer shows the deployed short `main` SHA so the live site can be compared with GitHub.
 
 ## Backup and Recovery Status
 
@@ -353,13 +353,12 @@ GitHub preserves source-code history but does not preserve production database c
 
 ## Operational Risks and Open Items
 
-1. GitHub Actions autodeploy has not yet been proven end to end on the live server.
-2. No dedicated API health endpoint exists; `/` and `/health` currently return `404`.
-3. Automated PostgreSQL backup and restore verification remain to be implemented.
-4. Container CPU and memory limits are not yet documented or enforced.
-5. The host reported that an OS restart is required.
-6. Release rollback and retention remain to be validated with the Docker-based deployment model.
-7. External uptime monitoring is not yet configured.
+1. Automated PostgreSQL backup and restore verification remain to be implemented.
+2. Container CPU and memory limits are not yet documented or enforced.
+3. The host reported that an OS restart is required.
+4. Release rollback and retention remain to be validated with the Docker-based deployment model.
+5. External uptime monitoring is not yet configured.
+6. Production smoke checks currently verify web/API readiness, but not real device push delivery.
 
 ## Definition of Infrastructure Complete
 
@@ -373,4 +372,4 @@ The first infrastructure milestone is considered achieved because:
 - Let's Encrypt certificates are installed;
 - HTTPS works publicly.
 
-The next infrastructure milestone is **verified automatic deployment**, followed by **backup and recovery validation**.
+The next infrastructure milestone is **backup and recovery validation**, followed by external monitoring and rollback validation.
