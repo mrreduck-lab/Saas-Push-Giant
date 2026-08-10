@@ -175,7 +175,7 @@ export default function PushGiantHome() {
       <footer className="pgFooter">
         <div>
           <strong>Push Giant</strong>
-          <small>main {buildSha} · deploy check 0807-2</small>
+          <small>main {buildSha} · deploy check 0807-3</small>
         </div>
         <nav>
           <a href="/register">Регистрация</a>
