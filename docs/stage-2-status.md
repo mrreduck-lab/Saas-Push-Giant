@@ -14,6 +14,8 @@
 - `@pushgiant/scheduler` due scheduled campaign polling and BullMQ enqueue.
 - Migration `0002_delivery_execution.sql`.
 - Deploy workflow now runs migrations before starting the full stack.
+- Public SDK event, heartbeat, and geo endpoints.
+- Service worker `push.open` tracking for campaign and one-shot test notification clicks.
 
 ## Implemented API Surface
 
@@ -23,8 +25,12 @@
 | `GET /readyz` | Public |
 | `GET /v1/projects/:projectId/config` | Public |
 | `POST /v1/subscriptions/upsert` | Public SDK payload |
+| `POST /v1/subscribers/heartbeat` | Public SDK payload |
+| `POST /v1/events/track` | Public SDK payload |
+| `POST /v1/subscribers/geo` | Public SDK payload |
 | `POST /v1/campaigns` | API key with `campaigns:write` |
 | `POST /v1/campaigns/:campaignId/send-now` | API key with `campaigns:send` |
+| `POST /v1/projects/:projectId/test-notification` | API key with `campaigns:send` |
 
 ## Required Runtime Variables
 
@@ -48,8 +54,8 @@
 
 ## Still To Implement
 
-- Public SDK project token or origin/domain validation for subscription upsert.
-- API endpoints to revoke subscriptions, record SDK events, heartbeat, geo consent, and clicks.
+- Public SDK project token or origin/domain validation for public writes.
+- API endpoint to revoke subscriptions.
 - Campaign stats endpoint.
 - Admin UI for organizations, projects, API keys, campaigns, subscribers, and stats.
 - VAPID key rotation endpoint and safe key-generation workflow.

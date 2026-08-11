@@ -316,6 +316,9 @@ export function buildServer({ config, database, queues }: ServerDeps) {
     );
 
     const notificationPayload = JSON.stringify({
+      api_url: process.env.API_PUBLIC_URL ?? "https://api.pushgiant.ru",
+      project_id: target.project_id,
+      subscriber_id: target.subscriber_id,
       title: parsed.data.title,
       body: parsed.data.body,
       url: parsed.data.url,

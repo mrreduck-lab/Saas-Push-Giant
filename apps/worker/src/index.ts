@@ -27,6 +27,7 @@ type CampaignRow = {
 
 type SubscriptionRow = {
   id: string;
+  subscriber_id: string;
   endpoint_encrypted: string;
   p256dh_encrypted: string;
   auth_encrypted: string;
@@ -43,6 +44,7 @@ const databaseUrl = process.env.DATABASE_URL ?? "postgres://pushgiant:pushgiant@
 const concurrency = Number(process.env.WORKER_CONCURRENCY ?? 10);
 const sendConcurrency = Number(process.env.WEB_PUSH_SEND_CONCURRENCY ?? 25);
 const batchSize = Number(process.env.CAMPAIGN_BATCH_SIZE ?? DEFAULT_CAMPAIGN_BATCH_SIZE);
+const publicApiUrl = (process.env.API_PUBLIC_URL ?? "https://api.pushgiant.ru").replace(/\/$/, "");
 const connection = {
   url: redisUrl,
   maxRetriesPerRequest: null
@@ -145,7 +147,7 @@ async function loadVapidCredentials(projectId: string): Promise<VapidRow | null>
 async function loadActiveSubscriptions(projectId: string, limit: number): Promise<SubscriptionRow[]> {
   const result = await pool.query<SubscriptionRow>(
     `
-      select id, endpoint_encrypted, p256dh_encrypted, auth_encrypted
+      select id, subscriber_id, endpoint_encrypted, p256dh_encrypted, auth_encrypted
       from push_subscriptions
       where project_id = $1
         and status = 'active'
@@ -184,7 +186,10 @@ async function sendToSubscription(
   subscription: SubscriptionRow
 ): Promise<boolean> {
   const payload = JSON.stringify({
+    api_url: publicApiUrl,
     campaign_id: campaign.id,
+    project_id: campaign.project_id,
+    subscriber_id: subscription.subscriber_id,
     title: campaign.title,
     body: campaign.body,
     url: campaign.url
