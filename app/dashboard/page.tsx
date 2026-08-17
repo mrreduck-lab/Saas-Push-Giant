@@ -48,6 +48,8 @@ type TrialProject = {
 };
 
 const TRIAL_PROJECT_STORAGE_KEY = 'pushgiant.trialProject.v1';
+const PWA_TEST_AUTO_OFFER_KEY = 'pushgiant.pwaTestAutoOffer.v1';
+const TEST_SUBSCRIPTION_CLEANUP_DELAY_MS = 120_000;
 
 export default function DashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -61,6 +63,8 @@ export default function DashboardPage() {
   const [isStandalonePwa, setIsStandalonePwa] = useState(false);
   const [pwaModeChecked, setPwaModeChecked] = useState(false);
   const [showConsent, setShowConsent] = useState(false);
+  const [consentSource, setConsentSource] = useState<'manual' | 'pwa-detected'>('manual');
+  const [pwaTestAutoOfferShown, setPwaTestAutoOfferShown] = useState(false);
   const [projectMode, setProjectMode] = useState<ProjectMode>('test');
   const [trialProject, setTrialProject] = useState<TrialProject | null>(null);
 
@@ -154,6 +158,32 @@ export default function DashboardPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!pwaModeChecked || !isStandalonePwa || showConsent || testState !== 'idle' || pwaTestAutoOfferShown) {
+      return;
+    }
+
+    if (typeof Notification === 'undefined' || Notification.permission === 'denied') {
+      return;
+    }
+
+    try {
+      if (window.sessionStorage.getItem(PWA_TEST_AUTO_OFFER_KEY)) {
+        setPwaTestAutoOfferShown(true);
+        return;
+      }
+
+      window.sessionStorage.setItem(PWA_TEST_AUTO_OFFER_KEY, '1');
+    } catch {
+      // If sessionStorage is unavailable, still show the offer once per mounted page.
+    }
+
+    setPwaTestAutoOfferShown(true);
+    setConsentSource('pwa-detected');
+    setTestMessage('PWA открыт с иконки. Можно сразу отправить тестовый push на это устройство.');
+    setShowConsent(true);
+  }, [isStandalonePwa, pwaModeChecked, pwaTestAutoOfferShown, showConsent, testState]);
+
   const metrics = useMemo(() => [
     ['Подписчики', formatNumber(overview?.subscribers), 'all time'],
     ['Активные устройства', formatNumber(overview?.active_devices), 'active push endpoints'],
@@ -224,6 +254,7 @@ export default function DashboardPage() {
       return;
     }
 
+    setConsentSource('manual');
     setShowConsent(true);
     setTestState('idle');
   }
@@ -299,12 +330,12 @@ export default function DashboardPage() {
         throw new Error(readPlatformError(sendData, `test_send_failed_${sendResponse.status}`));
       }
 
-      await subscription.unsubscribe().catch(() => false);
+      scheduleBrowserTestSubscriptionCleanup(subscription);
       setTestState('reset');
-      setTestMessage('Тестовый push отправлен. Временная подписка сброшена на сервере и в браузере.');
+      setTestMessage('Тестовый push отправлен. Серверная тестовая аудитория уже сброшена; браузерная подписка удалится через пару минут, чтобы iPhone успел получить уведомление.');
     } catch (testError) {
       if (subscription) {
-        await subscription.unsubscribe().catch(() => false);
+        scheduleBrowserTestSubscriptionCleanup(subscription);
       }
 
       setTestState('failed');
@@ -576,16 +607,18 @@ export default function DashboardPage() {
         <div className="consentOverlay" role="dialog" aria-modal="true" aria-labelledby="push-consent-title">
           <section className="consentModal">
             <p className="eyebrow">Consent</p>
-            <h2 id="push-consent-title">Согласие на тестовое уведомление</h2>
+            <h2 id="push-consent-title">
+              {consentSource === 'pwa-detected' ? 'PWA найден, отправить тестовый push?' : 'Согласие на тестовое уведомление'}
+            </h2>
             <p>
               Вы разрешаете Push Giant отправить одно тестовое push-уведомление на это устройство,
               чтобы проверить работу установленного PWA. Подписка создаётся только для проверки,
-              не попадает в боевую аудиторию и будет сброшена сразу после отправки.
+              не попадает в боевую аудиторию и сбрасывается на сервере сразу после отправки.
             </p>
             <div className="consentActions">
               <button type="button" onClick={() => setShowConsent(false)}>Отмена</button>
               <button type="button" onClick={() => { setShowConsent(false); void runOneShotTest(); }}>
-                Согласен, показать системный запрос
+                {consentSource === 'pwa-detected' ? 'Отправить тестовый push' : 'Согласен, показать системный запрос'}
               </button>
             </div>
           </section>
@@ -772,4 +805,10 @@ function urlBase64ToUint8Array(value: string) {
   const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
   const raw = atob(base64);
   return Uint8Array.from(Array.from(raw, (char) => char.charCodeAt(0)));
+}
+
+function scheduleBrowserTestSubscriptionCleanup(subscription: PushSubscription) {
+  window.setTimeout(() => {
+    void subscription.unsubscribe().catch(() => false);
+  }, TEST_SUBSCRIPTION_CLEANUP_DELAY_MS);
 }
