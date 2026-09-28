@@ -12,7 +12,8 @@ import {
   subscriberHeartbeatSchema,
   subscriptionUpsertSchema,
   testNotificationSchema,
-  trialRegistrationSchema
+  trialRegistrationSchema,
+  walletGeoCampaignCreateSchema
 } from "@pushgiant/shared";
 import type { ApiConfig } from "./config.js";
 import type { Database } from "./db.js";
@@ -32,6 +33,7 @@ import {
   upsertSubscription
 } from "./repositories.js";
 import type { ApiKeyIdentity } from "./repositories.js";
+import { createWalletGeoCampaign, listWalletGeoCampaigns, setWalletGeoCampaignStatus } from "./wallet-repositories.js";
 
 type ServerDeps = {
   config: ApiConfig;
@@ -238,6 +240,35 @@ export function buildServer({ config, database, queues }: ServerDeps) {
     }
 
     return { subscribers };
+  });
+
+  app.get("/v1/projects/:projectId/wallet/geo-campaigns", async (request, reply) => {
+    const apiKey = await requireApiKey(request, database, ["campaigns:write"]);
+    if (!apiKey) return reply.code(401).send({ error: "unauthorized" });
+    const { projectId } = request.params as { projectId: string };
+    const campaigns = await listWalletGeoCampaigns(database.pool, apiKey, projectId);
+    if (!campaigns) return reply.code(404).send({ error: "project_not_found" });
+    return { campaigns };
+  });
+
+  app.post("/v1/wallet/geo-campaigns", async (request, reply) => {
+    const apiKey = await requireApiKey(request, database, ["campaigns:write"]);
+    if (!apiKey) return reply.code(401).send({ error: "unauthorized" });
+    const parsed = walletGeoCampaignCreateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_wallet_geo_campaign", details: parsed.error.flatten() });
+    const campaign = await createWalletGeoCampaign(database.pool, apiKey, parsed.data);
+    if (!campaign) return reply.code(404).send({ error: "project_not_found" });
+    return reply.code(201).send(campaign);
+  });
+
+  app.post("/v1/wallet/geo-campaigns/:campaignId/:action", async (request, reply) => {
+    const apiKey = await requireApiKey(request, database, ["campaigns:write"]);
+    if (!apiKey) return reply.code(401).send({ error: "unauthorized" });
+    const { campaignId, action } = request.params as { campaignId: string; action: string };
+    if (action !== "activate" && action !== "stop") return reply.code(400).send({ error: "invalid_action" });
+    const campaign = await setWalletGeoCampaignStatus(database.pool, apiKey, campaignId, action === "activate" ? "active" : "cancelled");
+    if (!campaign) return reply.code(404).send({ error: "wallet_geo_campaign_not_found" });
+    return campaign;
   });
 
   app.post("/v1/campaigns", async (request, reply) => {
