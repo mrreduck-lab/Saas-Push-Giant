@@ -121,6 +121,22 @@ export const campaignCreateSchema = z.object({
 
 export type CampaignCreate = z.infer<typeof campaignCreateSchema>;
 
+
+export const walletGeoCampaignCreateSchema = z.object({
+  project_id: z.string().uuid(),
+  name: z.string().min(1).max(120),
+  relevant_text: z.string().min(1).max(240),
+  level_filter: z.array(z.number().int().min(1).max(6)).max(6).optional(),
+  starts_at: z.string().datetime().optional(),
+  ends_at: z.string().datetime().optional(),
+  locations: z.array(z.object({
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180)
+  })).min(1).max(10)
+});
+
+export type WalletGeoCampaignCreate = z.infer<typeof walletGeoCampaignCreateSchema>;
+
 export const testNotificationSchema = z.object({
   project_id: z.string().uuid(),
   anonymous_id: z.string().min(10).max(120).regex(/^pg_test_[a-zA-Z0-9_-]+$/),
