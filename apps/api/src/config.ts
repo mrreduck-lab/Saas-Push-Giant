@@ -6,6 +6,7 @@ export type ApiConfig = {
   redisUrl: string;
   dataEncryptionKey?: string;
   corsOrigins: string[];
+  adminToken?: string;
 };
 
 export function loadConfig(): ApiConfig {
@@ -16,6 +17,7 @@ export function loadConfig(): ApiConfig {
     databaseUrl: process.env.DATABASE_URL ?? "postgres://pushgiant:pushgiant@localhost:5432/pushgiant",
     redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
     dataEncryptionKey: process.env.DATA_ENCRYPTION_KEY,
+    adminToken: process.env.PUSH_ADMIN_TOKEN,
     corsOrigins: (process.env.CORS_ORIGINS ?? "http://localhost:3000")
       .split(",")
       .map((origin) => origin.trim())
