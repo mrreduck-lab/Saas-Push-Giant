@@ -274,6 +274,17 @@ export default function DashboardPage() {
       href: '#Рассылки'
     }
   ];
+  const realCampaignSent = campaigns.some((campaign) =>
+    campaign.title !== 'Push Giant test' && ['queued', 'sending', 'completed', 'partially_failed'].includes(campaign.status)
+  );
+  const campaignStep = onboardingSteps.find((step) => step.key === 'campaign');
+  if (campaignStep) {
+    campaignStep.done = realCampaignSent;
+    campaignStep.note = realCampaignSent
+      ? 'Первая клиентская кампания создана и отправлена в delivery pipeline.'
+      : 'Создайте минимальную кампанию для активной аудитории.';
+  }
+
   const completedOnboardingSteps = onboardingSteps.filter((step) => step.done).length;
   const nextOnboardingStep = onboardingSteps.find((step) => !step.done);
 
