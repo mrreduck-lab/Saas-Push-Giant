@@ -521,6 +521,43 @@ export async function loadLatestActiveSubscription(
   return result.rows[0] ?? null;
 }
 
+export async function recordProjectTestDelivery(
+  pool: Pool,
+  target: TestNotificationTarget,
+  title: string,
+  body: string,
+  providerStatusCode?: number
+) {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const campaign = await client.query<{ id: string }>(
+      `
+        insert into campaigns (organization_id, project_id, name, title, body, status, created_at, updated_at)
+        values ($1, $2, 'Project test push', $3, $4, 'completed', now(), now())
+        returning id
+      `,
+      [target.organization_id, target.project_id, title, body]
+    );
+    await client.query(
+      `
+        insert into delivery_attempts (
+          organization_id, project_id, campaign_id, subscription_id, status, provider_status_code
+        ) values ($1, $2, $3, $4, 'sent', $5)
+      `,
+      [target.organization_id, target.project_id, campaign.rows[0].id, target.subscription_id, providerStatusCode ?? null]
+    );
+    await client.query("commit");
+    return campaign.rows[0].id;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+
 export async function listProjectCampaigns(
   pool: Pool,
   apiKey: ApiKeyIdentity,
