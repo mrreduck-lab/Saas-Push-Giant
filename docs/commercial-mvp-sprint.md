@@ -58,9 +58,9 @@ These items are baseline capabilities, not new work in this sprint.
 
 ### CMVP-06 — Pilot readiness
 - [ ] Verify the complete flow with a fresh trial account.
-- [ ] Run production build/checks.
-- [ ] Document known limitations for the first 3–5 pilot customers.
-- [ ] Merge to `main` only after verification.
+- [x] Run production build/checks.
+- [x] Document known limitations for the first 3–5 pilot customers.
+- [x] Merge to `main` only after CI verification.
 
 ## Explicitly outside this sprint
 
@@ -106,6 +106,13 @@ Dedicated UX/design review: walk the product as a new customer, test clarity of 
 - CMVP-04: 2 implementation iterations so far (limit 20).
 - CMVP-05: 2 implementation iterations so far (limit 20).
 - CMVP-06: 2 verification/hardening iterations so far (limit 20).
+
+### 2026-10-07 · Production acceptance
+- PR #4 passed CI on final head `632e9c9` (platform build, migration dry-run, Next build).
+- Squash-merged to `main` as `1f085ed`.
+- Production deploy run #55 completed successfully.
+- Production smoke passed from GitHub Actions: public web, `app.pushgiant.ru/dashboard`, API `/healthz`, API `/readyz`, and `/sdk/pushgiant.js`.
+- CMVP-02 through CMVP-05 are deployed. The remaining CMVP-06 checkbox is the browser-level fresh-trial acceptance path; it requires a real browser/device permission flow and must not be faked by server smoke.
 
 ## Logging rule
 
