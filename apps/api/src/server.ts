@@ -27,6 +27,7 @@ import {
   loadLatestActiveSubscription,
   loadTestNotificationTarget,
   markCampaignQueued,
+  projectOriginMatchesDomain,
   recordEvent,
   recordHeartbeat,
   resetTestNotificationTarget,
@@ -53,7 +54,9 @@ export function buildServer({ config, database, queues }: ServerDeps) {
 
   app.register(helmet);
   app.register(cors, {
-    origin: config.corsOrigins,
+    // Browser SDK runs on customer domains. Public write routes below verify that
+    // the request Origin matches the domain registered for the project.
+    origin: true,
     credentials: true
   });
 
@@ -134,6 +137,10 @@ export function buildServer({ config, database, queues }: ServerDeps) {
       return reply.code(400).send({ error: "invalid_subscription", details: parsed.error.flatten() });
     }
 
+    if (!(await projectOriginMatchesDomain(database.pool, parsed.data.project_id, request.headers.origin))) {
+      return reply.code(403).send({ error: "origin_not_registered" });
+    }
+
     const subscription = await upsertSubscription(database.pool, cipher, parsed.data);
     if (!subscription) {
       return reply.code(404).send({ error: "project_not_found" });
@@ -152,6 +159,10 @@ export function buildServer({ config, database, queues }: ServerDeps) {
       return reply.code(400).send({ error: "invalid_heartbeat", details: parsed.error.flatten() });
     }
 
+    if (!(await projectOriginMatchesDomain(database.pool, parsed.data.project_id, request.headers.origin))) {
+      return reply.code(403).send({ error: "origin_not_registered" });
+    }
+
     const result = await recordHeartbeat(database.pool, parsed.data);
     if (!result) {
       return reply.code(404).send({ error: "project_not_found" });
@@ -166,6 +177,10 @@ export function buildServer({ config, database, queues }: ServerDeps) {
       return reply.code(400).send({ error: "invalid_event", details: parsed.error.flatten() });
     }
 
+    if (!(await projectOriginMatchesDomain(database.pool, parsed.data.project_id, request.headers.origin))) {
+      return reply.code(403).send({ error: "origin_not_registered" });
+    }
+
     const result = await recordEvent(database.pool, parsed.data);
     if (!result) {
       return reply.code(404).send({ error: "project_not_found" });
@@ -178,6 +193,10 @@ export function buildServer({ config, database, queues }: ServerDeps) {
     const parsed = geoUpdateSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "invalid_geo", details: parsed.error.flatten() });
+    }
+
+    if (!(await projectOriginMatchesDomain(database.pool, parsed.data.project_id, request.headers.origin))) {
+      return reply.code(403).send({ error: "origin_not_registered" });
     }
 
     const result = await updateSubscriberGeo(database.pool, parsed.data);
