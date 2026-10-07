@@ -30,6 +30,7 @@ import {
   projectOriginMatchesDomain,
   recordEvent,
   recordHeartbeat,
+  recordProjectTestDelivery,
   resetTestNotificationTarget,
   updateSubscriberGeo,
   upsertSubscription
@@ -296,7 +297,14 @@ export function buildServer({ config, database, queues }: ServerDeps) {
         endpoint: cipher.decrypt(target.endpoint_encrypted),
         keys: { p256dh: cipher.decrypt(target.p256dh_encrypted), auth: cipher.decrypt(target.auth_encrypted) }
       }, payload, { TTL: 60, urgency: "normal", topic: "pushgiant-project-test" });
-      return reply.code(202).send({ status: "sent", subscriber_id: target.subscriber_id, provider_status_code: response.statusCode });
+      const campaignId = await recordProjectTestDelivery(
+        database.pool,
+        target,
+        String(body.title || "Push Giant test").slice(0, 120),
+        String(body.body || "Тестовое уведомление доставлено активному подписчику.").slice(0, 240),
+        response.statusCode
+      );
+      return reply.code(202).send({ status: "sent", campaign_id: campaignId, subscriber_id: target.subscriber_id, provider_status_code: response.statusCode });
     } catch (error) {
       return reply.code(502).send({ error: "test_notification_failed", provider_status_code: readStatusCode(error) });
     }
