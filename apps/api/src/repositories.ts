@@ -533,8 +533,8 @@ export async function recordProjectTestDelivery(
     await client.query("begin");
     const campaign = await client.query<{ id: string }>(
       `
-        insert into campaigns (organization_id, project_id, name, title, body, status, created_at, updated_at)
-        values ($1, $2, 'Project test push', $3, $4, 'completed', now(), now())
+        insert into campaigns (organization_id, project_id, status, title, body)
+        values ($1, $2, 'completed', $3, $4)
         returning id
       `,
       [target.organization_id, target.project_id, title, body]
