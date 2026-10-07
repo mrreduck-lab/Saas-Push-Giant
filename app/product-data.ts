@@ -1,5 +1,6 @@
 export const marketingNav = [
   { href: "/#features", label: "Возможности" },
+  { href: "/app-builder", label: "App Builder" },
   { href: "/pricing", label: "Тарифы" },
   { href: "/wordpress", label: "WordPress" },
   { href: "/bitrix", label: "Bitrix" },
