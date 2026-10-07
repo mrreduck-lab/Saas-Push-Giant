@@ -73,6 +73,10 @@ The second product layer adds:
 
 Stage 2 status is tracked in [docs/stage-2-status.md](docs/stage-2-status.md).
 
+## Current Commercial MVP Sprint
+
+The active customer-readiness sprint is tracked in [docs/commercial-mvp-sprint.md](docs/commercial-mvp-sprint.md). This document is the source of truth for planned tasks, completed work, blockers, and the sprint work log. Update it with every meaningful Commercial MVP implementation commit.
+
 ## Development Rules
 
 - Do not change `raschini-site`; all product work happens here.
