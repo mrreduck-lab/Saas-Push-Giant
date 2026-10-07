@@ -285,9 +285,9 @@ export async function recordHeartbeat(pool: Pool, payload: SubscriberHeartbeat) 
         `
           update integration_connections
           set status = 'active', last_checked_at = now(), connected_at = coalesce(connected_at, now()), updated_at = now()
-          where project_id = $1 and kind in ('wordpress', 'universal_js')
+          where project_id = $1 and kind = $2
         `,
-        [project.id]
+        [project.id, payload.external_source === 'wordpress' ? 'wordpress' : 'universal_js']
       );
     } catch {
       // Invalid origins are rejected by the shared schema; keep this defensive.
