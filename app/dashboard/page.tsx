@@ -193,6 +193,65 @@ export default function DashboardPage() {
     ['Статус сайта', overview?.site_status ?? 'pending', 'domain verification']
   ], [overview]);
 
+  const activeSubscribers = subscribers.filter((subscriber) => {
+    const status = (subscriber.subscription_status ?? subscriber.status ?? '').toLowerCase();
+    return status === 'active' || status === 'subscribed' || status === 'enabled';
+  }).length;
+  const onboardingSteps = [
+    {
+      key: 'trial',
+      title: 'Создайте trial-проект',
+      note: trialProject ? 'Проект и API key созданы.' : 'Регистрация создаст отдельный проект и ключ доступа.',
+      done: Boolean(trialProject),
+      href: '/register'
+    },
+    {
+      key: 'project',
+      title: 'Переключитесь на production',
+      note: activeProject ? 'Кабинет работает с вашим проектом.' : 'Выберите Client production после регистрации.',
+      done: Boolean(activeProject),
+      action: () => chooseProject('production')
+    },
+    {
+      key: 'connect',
+      title: 'Подключите сайт',
+      note: overview?.site_status === 'verified'
+        ? 'Сайт подтверждён платформой.'
+        : 'Установите WordPress plugin и завершите подключение сайта.',
+      done: overview?.site_status === 'verified',
+      href: '/downloads/pushgiant-wordpress.zip'
+    },
+    {
+      key: 'subscriber',
+      title: 'Получите первого подписчика',
+      note: activeSubscribers > 0
+        ? `Активных подписчиков: ${activeSubscribers}.`
+        : 'После подключения сайта разрешите уведомления на тестовом устройстве.',
+      done: activeSubscribers > 0,
+      href: '#Подписчики'
+    },
+    {
+      key: 'test',
+      title: 'Проверьте push',
+      note: (overview?.sent_pushes ?? 0) > 0
+        ? 'Платформа уже зафиксировала отправку.'
+        : 'После появления активного подписчика отправьте проверочное уведомление.',
+      done: (overview?.sent_pushes ?? 0) > 0,
+      href: '#Рассылки'
+    },
+    {
+      key: 'campaign',
+      title: 'Отправьте первую рассылку',
+      note: (overview?.sent_pushes ?? 0) > 0
+        ? 'Есть история отправок. Проверьте результат ниже.'
+        : 'Создайте минимальную кампанию для активной аудитории.',
+      done: (overview?.sent_pushes ?? 0) > 0,
+      href: '#Рассылки'
+    }
+  ];
+  const completedOnboardingSteps = onboardingSteps.filter((step) => step.done).length;
+  const nextOnboardingStep = onboardingSteps.find((step) => !step.done);
+
   const activeProjectLabel = activeProject?.label || 'Push Giant test';
   const activeProjectNote = activeProject
     ? `${activeProject.siteUrl || 'trial project'} · trial до ${formatDate(activeProject.trialEndsAt)}`
@@ -370,6 +429,41 @@ export default function DashboardPage() {
             <span>{error}</span>
           </section>
         ) : null}
+
+        <section className="panel onboarding">
+          <div className="onboardingHead">
+            <div>
+              <p className="eyebrow">Commercial MVP onboarding</p>
+              <h2>Запустите первый push по шагам</h2>
+              <p>Готово {completedOnboardingSteps} из {onboardingSteps.length}. Статус считается из реального проекта, подписчиков и отправок.</p>
+            </div>
+            <strong>{Math.round((completedOnboardingSteps / onboardingSteps.length) * 100)}%</strong>
+          </div>
+          {nextOnboardingStep ? (
+            <div className="nextAction">
+              <span>Следующий шаг</span>
+              <strong>{nextOnboardingStep.title}</strong>
+              <small>{nextOnboardingStep.note}</small>
+            </div>
+          ) : (
+            <div className="nextAction complete">
+              <span>Готово</span>
+              <strong>Первый клиентский путь пройден</strong>
+              <small>Проект готов к проверке полного pilot flow.</small>
+            </div>
+          )}
+          <div className="onboardingSteps">
+            {onboardingSteps.map((step, index) => (
+              <article className={step.done ? 'doneStep' : nextOnboardingStep?.key === step.key ? 'currentStep' : ''} key={step.key}>
+                <span>{step.done ? '✓' : index + 1}</span>
+                <strong>{step.title}</strong>
+                <small>{step.note}</small>
+                {!step.done && step.href ? <a href={step.href}>{step.key === 'trial' ? 'Создать trial' : step.key === 'connect' ? 'Скачать plugin' : 'Перейти'}</a> : null}
+                {!step.done && step.action ? <button type="button" onClick={step.action}>Выбрать production</button> : null}
+              </article>
+            ))}
+          </div>
+        </section>
 
         <section className="panel projectMode">
           <div>
@@ -647,6 +741,22 @@ export default function DashboardPage() {
         .eyebrow{margin:0 0 8px;text-transform:uppercase;letter-spacing:.18em;font-size:10px;color:#a98d66}
         h2{margin:0 0 18px;font-family:var(--font-display),Georgia,serif;font-weight:400;font-size:34px}
         .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+        .onboarding{display:grid;gap:16px}
+        .onboardingHead{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
+        .onboardingHead p:not(.eyebrow){margin:0;color:#62574c}
+        .onboardingHead>strong{font-family:var(--font-display),Georgia,serif;font-size:48px;font-weight:400}
+        .nextAction{display:grid;gap:5px;padding:16px;border-radius:8px;background:#17130f;color:#fff}
+        .nextAction span{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:#c9ad80}
+        .nextAction small{color:#cfc5b8}
+        .nextAction.complete{background:#e6f3e8;color:#285634}
+        .nextAction.complete span,.nextAction.complete small{color:#497054}
+        .onboardingSteps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+        .onboardingSteps article{min-height:180px;display:flex;flex-direction:column}
+        .onboardingSteps article>span{font-size:18px}
+        .onboardingSteps article>strong{font-size:20px}
+        .onboardingSteps article a,.onboardingSteps article button{width:max-content;margin-top:auto;padding:9px 11px;border-radius:6px;background:#17130f;color:#fff;border:1px solid #17130f;font-size:12px}
+        .doneStep{background:#f1f7ef;border-color:#b9d2b6}
+        .currentStep{border-color:#a98d66;box-shadow:inset 0 0 0 1px rgba(169,141,102,.18)}
         .projectMode{display:grid;grid-template-columns:minmax(220px,.65fr) 1fr;gap:18px;align-items:start}
         .projectCards,.guideSteps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
         .projectCards{grid-template-columns:1fr 1fr}
@@ -696,7 +806,7 @@ export default function DashboardPage() {
         .consentModal p:not(.eyebrow){margin:0;color:#62574c;line-height:1.58}
         .consentActions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:22px}
         .consentActions button:first-child{background:#fffaf3;color:#17130f;border-color:rgba(21,18,15,.22)}
-        @media(max-width:880px){.dashboard{grid-template-columns:1fr}aside{position:static;height:auto}.metrics,.cards,.split,.projectMode,.projectCards,.guideSteps{grid-template-columns:1fr}.table{grid-template-columns:1fr}.table span{border-right:0}.topline{display:grid}}
+        @media(max-width:880px){.dashboard{grid-template-columns:1fr}aside{position:static;height:auto}.metrics,.cards,.split,.projectMode,.projectCards,.guideSteps,.onboardingSteps{grid-template-columns:1fr}.table{grid-template-columns:1fr}.table span{border-right:0}.topline{display:grid}}
       `}</style>
     </main>
   );
