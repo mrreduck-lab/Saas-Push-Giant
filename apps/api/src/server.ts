@@ -23,10 +23,14 @@ import {
   createTrialRegistration,
   getProjectOverview,
   listProjectSubscribers,
+  listProjectCampaigns,
+  loadLatestActiveSubscription,
   loadTestNotificationTarget,
   markCampaignQueued,
+  projectOriginMatchesDomain,
   recordEvent,
   recordHeartbeat,
+  recordProjectTestDelivery,
   resetTestNotificationTarget,
   updateSubscriberGeo,
   upsertSubscription
@@ -51,7 +55,9 @@ export function buildServer({ config, database, queues }: ServerDeps) {
 
   app.register(helmet);
   app.register(cors, {
-    origin: config.corsOrigins,
+    // Browser SDK runs on customer domains. Public write routes below verify that
+    // the request Origin matches the domain registered for the project.
+    origin: true,
     credentials: true
   });
 
@@ -132,6 +138,11 @@ export function buildServer({ config, database, queues }: ServerDeps) {
       return reply.code(400).send({ error: "invalid_subscription", details: parsed.error.flatten() });
     }
 
+    if (parsed.data.external_source !== "pushgiant_test" &&
+        !(await projectOriginMatchesDomain(database.pool, parsed.data.project_id, request.headers.origin))) {
+      return reply.code(403).send({ error: "origin_not_registered" });
+    }
+
     const subscription = await upsertSubscription(database.pool, cipher, parsed.data);
     if (!subscription) {
       return reply.code(404).send({ error: "project_not_found" });
@@ -150,6 +161,10 @@ export function buildServer({ config, database, queues }: ServerDeps) {
       return reply.code(400).send({ error: "invalid_heartbeat", details: parsed.error.flatten() });
     }
 
+    if (!(await projectOriginMatchesDomain(database.pool, parsed.data.project_id, request.headers.origin))) {
+      return reply.code(403).send({ error: "origin_not_registered" });
+    }
+
     const result = await recordHeartbeat(database.pool, parsed.data);
     if (!result) {
       return reply.code(404).send({ error: "project_not_found" });
@@ -164,6 +179,10 @@ export function buildServer({ config, database, queues }: ServerDeps) {
       return reply.code(400).send({ error: "invalid_event", details: parsed.error.flatten() });
     }
 
+    if (!(await projectOriginMatchesDomain(database.pool, parsed.data.project_id, request.headers.origin))) {
+      return reply.code(403).send({ error: "origin_not_registered" });
+    }
+
     const result = await recordEvent(database.pool, parsed.data);
     if (!result) {
       return reply.code(404).send({ error: "project_not_found" });
@@ -176,6 +195,10 @@ export function buildServer({ config, database, queues }: ServerDeps) {
     const parsed = geoUpdateSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "invalid_geo", details: parsed.error.flatten() });
+    }
+
+    if (!(await projectOriginMatchesDomain(database.pool, parsed.data.project_id, request.headers.origin))) {
+      return reply.code(403).send({ error: "origin_not_registered" });
     }
 
     const result = await updateSubscriberGeo(database.pool, parsed.data);
@@ -238,6 +261,53 @@ export function buildServer({ config, database, queues }: ServerDeps) {
     }
 
     return { subscribers };
+  });
+
+  app.get("/v1/projects/:projectId/campaigns", async (request, reply) => {
+    const apiKey = await requireApiKey(request, database, ["analytics:read"]);
+    if (!apiKey) return reply.code(401).send({ error: "unauthorized" });
+    const { projectId } = request.params as { projectId: string };
+    const campaigns = await listProjectCampaigns(database.pool, apiKey, projectId, 20);
+    if (!campaigns) return reply.code(404).send({ error: "project_not_found" });
+    return { campaigns };
+  });
+
+  app.post("/v1/projects/:projectId/test-active-notification", async (request, reply) => {
+    const apiKey = await requireApiKey(request, database, ["campaigns:send"]);
+    if (!apiKey) return reply.code(401).send({ error: "unauthorized" });
+    const { projectId } = request.params as { projectId: string };
+    const body = (request.body ?? {}) as { title?: string; body?: string; url?: string };
+    const target = await loadLatestActiveSubscription(database.pool, apiKey, projectId);
+    if (!target) return reply.code(409).send({ error: "no_active_subscriber" });
+
+    webpush.setVapidDetails(target.subject, target.public_key, cipher.decrypt(target.private_key_encrypted));
+    const payload = JSON.stringify({
+      api_url: process.env.API_PUBLIC_URL ?? "https://api.pushgiant.ru",
+      project_id: target.project_id,
+      subscriber_id: target.subscriber_id,
+      title: String(body.title || "Push Giant test").slice(0, 120),
+      body: String(body.body || "Тестовое уведомление доставлено активному подписчику.").slice(0, 240),
+      url: body.url,
+      tag: "pushgiant-project-test",
+      test: true
+    });
+
+    try {
+      const response = await webpush.sendNotification({
+        endpoint: cipher.decrypt(target.endpoint_encrypted),
+        keys: { p256dh: cipher.decrypt(target.p256dh_encrypted), auth: cipher.decrypt(target.auth_encrypted) }
+      }, payload, { TTL: 60, urgency: "normal", topic: "pushgiant-project-test" });
+      const campaignId = await recordProjectTestDelivery(
+        database.pool,
+        target,
+        String(body.title || "Push Giant test").slice(0, 120),
+        String(body.body || "Тестовое уведомление доставлено активному подписчику.").slice(0, 240),
+        response.statusCode
+      );
+      return reply.code(202).send({ status: "sent", campaign_id: campaignId, subscriber_id: target.subscriber_id, provider_status_code: response.statusCode });
+    } catch (error) {
+      return reply.code(502).send({ error: "test_notification_failed", provider_status_code: readStatusCode(error) });
+    }
   });
 
   app.post("/v1/campaigns", async (request, reply) => {
@@ -479,7 +549,8 @@ const PUSHGIANT_BROWSER_SDK = String.raw`
         os: detectOs(),
         user_agent: navigator.userAgent,
         locale: navigator.language,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        site_origin: window.location.origin
       })
     });
 
@@ -495,13 +566,15 @@ const PUSHGIANT_BROWSER_SDK = String.raw`
         project_id: config.projectId,
         anonymous_id: config.anonymousId,
         external_customer_id: config.externalCustomerId || undefined,
+        external_source: config.externalSource,
         permission: typeof Notification === "undefined" ? "default" : Notification.permission,
         platform: navigator.platform,
         browser: detectBrowser(),
         os: detectOs(),
         user_agent: navigator.userAgent,
         locale: navigator.language,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        site_origin: window.location.origin
       })
     });
   }

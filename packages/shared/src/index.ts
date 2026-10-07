@@ -60,6 +60,7 @@ export const subscriberHeartbeatSchema = z.object({
   subscriber_id: z.string().uuid().optional(),
   anonymous_id: z.string().min(1).optional(),
   external_customer_id: z.string().min(1).optional(),
+  external_source: z.string().min(1).max(64).optional(),
   endpoint: z.string().url().optional(),
   permission: z.enum(["default", "granted", "denied"]).optional(),
   platform: z.string().optional(),
@@ -67,7 +68,8 @@ export const subscriberHeartbeatSchema = z.object({
   os: z.string().optional(),
   user_agent: z.string().optional(),
   locale: z.string().optional(),
-  timezone: z.string().optional()
+  timezone: z.string().optional(),
+  site_origin: z.string().url().optional()
 });
 
 export type SubscriberHeartbeat = z.infer<typeof subscriberHeartbeatSchema>;

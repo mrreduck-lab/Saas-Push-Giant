@@ -93,6 +93,22 @@ async function findActiveProjectForApiKey(
   return result.rows[0] ?? null;
 }
 
+
+export async function projectOriginMatchesDomain(pool: Pool, projectId: string, origin: string | undefined) {
+  if (!origin) return false;
+  let host: string;
+  try {
+    host = new URL(origin).host.toLowerCase();
+  } catch {
+    return false;
+  }
+  const result = await pool.query(
+    `select 1 from domains where project_id = $1 and lower(host) = $2 limit 1`,
+    [projectId, host]
+  );
+  return result.rowCount === 1;
+}
+
 export function hashEndpoint(endpoint: string): string {
   return hashSecret(endpoint);
 }
@@ -269,6 +285,31 @@ export async function recordHeartbeat(pool: Pool, payload: SubscriberHeartbeat) 
   }
 
   const subscriberId = await upsertSubscriberIdentity(pool, project, payload);
+
+  if (payload.site_origin) {
+    try {
+      const heartbeatHost = new URL(payload.site_origin).host.toLowerCase();
+      await pool.query(
+        `
+          update domains
+          set status = 'verified', verified_at = coalesce(verified_at, now())
+          where project_id = $1 and lower(host) = $2 and status <> 'verified'
+        `,
+        [project.id, heartbeatHost]
+      );
+      await pool.query(
+        `
+          update integration_connections
+          set status = 'active', last_checked_at = now(), connected_at = coalesce(connected_at, now()), updated_at = now()
+          where project_id = $1 and kind = $2
+        `,
+        [project.id, payload.external_source === 'wordpress' ? 'wordpress' : 'universal_js']
+      );
+    } catch {
+      // Invalid origins are rejected by the shared schema; keep this defensive.
+    }
+  }
+
   if (payload.endpoint) {
     await pool.query(
       `
@@ -445,6 +486,106 @@ export async function listProjectSubscribers(
     [project.id, Math.min(Math.max(limit, 1), 500)]
   );
 
+  return result.rows;
+}
+
+export async function loadLatestActiveSubscription(
+  pool: Pool,
+  apiKey: ApiKeyIdentity,
+  projectId: string
+): Promise<TestNotificationTarget | null> {
+  const project = await findActiveProjectForApiKey(pool, projectId, apiKey);
+  if (!project) return null;
+
+  const result = await pool.query<TestNotificationTarget>(
+    `
+      select
+        ps.organization_id,
+        ps.project_id,
+        ps.subscriber_id,
+        ps.id as subscription_id,
+        ps.endpoint_encrypted,
+        ps.p256dh_encrypted,
+        ps.auth_encrypted,
+        vc.public_key,
+        vc.private_key_encrypted,
+        vc.subject
+      from push_subscriptions ps
+      join vapid_credentials vc on vc.project_id = ps.project_id
+      where ps.project_id = $1 and ps.status = 'active'
+      order by ps.last_seen_at desc
+      limit 1
+    `,
+    [project.id]
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function recordProjectTestDelivery(
+  pool: Pool,
+  target: TestNotificationTarget,
+  title: string,
+  body: string,
+  providerStatusCode?: number
+) {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const campaign = await client.query<{ id: string }>(
+      `
+        insert into campaigns (organization_id, project_id, status, title, body)
+        values ($1, $2, 'completed', $3, $4)
+        returning id
+      `,
+      [target.organization_id, target.project_id, title, body]
+    );
+    await client.query(
+      `
+        insert into delivery_attempts (
+          organization_id, project_id, campaign_id, subscription_id, status, provider_status_code
+        ) values ($1, $2, $3, $4, 'sent', $5)
+      `,
+      [target.organization_id, target.project_id, campaign.rows[0].id, target.subscription_id, providerStatusCode ?? null]
+    );
+    await client.query("commit");
+    return campaign.rows[0].id;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+
+export async function listProjectCampaigns(
+  pool: Pool,
+  apiKey: ApiKeyIdentity,
+  projectId: string,
+  limit = 20
+) {
+  const project = await findActiveProjectForApiKey(pool, projectId, apiKey);
+  if (!project) return null;
+
+  const result = await pool.query(
+    `
+      select
+        c.id,
+        c.title,
+        c.status,
+        c.created_at,
+        c.updated_at,
+        coalesce(sum(cb.sent_count), 0)::int as sent_count,
+        coalesce(sum(cb.failed_count), 0)::int as failed_count
+      from campaigns c
+      left join campaign_batches cb on cb.campaign_id = c.id
+      where c.project_id = $1
+      group by c.id
+      order by c.created_at desc
+      limit $2
+    `,
+    [project.id, Math.min(Math.max(limit, 1), 100)]
+  );
   return result.rows;
 }
 
