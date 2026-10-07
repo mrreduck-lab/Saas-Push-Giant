@@ -31,9 +31,9 @@ These items are baseline capabilities, not new work in this sprint.
 ## Sprint tasks
 
 ### CMVP-01 — Single onboarding state
-- [ ] Turn the existing capabilities into one ordered onboarding checklist in the customer dashboard.
-- [ ] Persist/derive completion state from real project data rather than cosmetic flags.
-- [ ] Show the next required action.
+- [x] Turn the existing capabilities into one ordered onboarding checklist in the customer dashboard.
+- [x] Persist/derive completion state from real project data rather than cosmetic flags.
+- [x] Show the next required action.
 
 ### CMVP-02 — Site connection
 - [ ] Make connection instructions customer-safe and project-specific.
@@ -81,6 +81,7 @@ Dedicated UX/design review: walk the product as a new customer, test clarity of 
 - Audited current dashboard, trial provisioning, platform API surface and WordPress download.
 - Confirmed that the major push primitives already exist; the sprint is primarily about closing the customer journey rather than rebuilding delivery.
 - Added this sprint tracker as the source of truth for planned and completed Commercial MVP work.
+- CMVP-01 implemented: dashboard now has a six-step Commercial MVP onboarding checklist, derives progress from trial/project/site/subscriber/send data, and highlights the next required action. Commit: `0a2861a`.
 
 ## Logging rule
 
