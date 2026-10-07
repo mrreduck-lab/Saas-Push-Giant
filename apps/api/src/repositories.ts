@@ -589,6 +589,67 @@ export async function listProjectCampaigns(
   return result.rows;
 }
 
+export async function getOwnerAdminOverview(pool: Pool) {
+  const [totals, registrations, projects] = await Promise.all([
+    pool.query(`
+      select
+        (select count(*)::int from users) as users,
+        (select count(*)::int from organizations) as organizations,
+        (select count(*)::int from projects) as projects,
+        (select count(*)::int from push_subscriptions where status = 'active') as active_subscriptions,
+        (select count(*)::int from campaigns) as campaigns,
+        (select count(*)::int from delivery_attempts where status = 'sent') as sent_deliveries
+    `),
+    pool.query(`
+      select
+        u.id,
+        u.email,
+        u.name,
+        u.created_at,
+        o.id as organization_id,
+        o.name as organization_name,
+        o.plan,
+        o.status,
+        count(distinct p.id)::int as projects,
+        count(distinct ps.id) filter (where ps.status = 'active')::int as active_subscriptions
+      from users u
+      left join organization_members om on om.user_id = u.id
+      left join organizations o on o.id = om.organization_id
+      left join projects p on p.organization_id = o.id
+      left join push_subscriptions ps on ps.organization_id = o.id
+      group by u.id, o.id
+      order by u.created_at desc
+      limit 100
+    `),
+    pool.query(`
+      select
+        p.id,
+        p.name,
+        p.status,
+        p.created_at,
+        o.id as organization_id,
+        o.name as organization_name,
+        o.plan,
+        d.host as domain,
+        d.status as domain_status,
+        count(distinct ps.id) filter (where ps.status = 'active')::int as active_subscriptions,
+        count(distinct c.id)::int as campaigns,
+        count(distinct da.id) filter (where da.status = 'sent')::int as sent_deliveries
+      from projects p
+      join organizations o on o.id = p.organization_id
+      left join domains d on d.id = p.default_domain_id
+      left join push_subscriptions ps on ps.project_id = p.id
+      left join campaigns c on c.project_id = p.id
+      left join delivery_attempts da on da.project_id = p.id
+      group by p.id, o.id, d.id
+      order by p.created_at desc
+      limit 100
+    `)
+  ]);
+  return { totals: totals.rows[0], registrations: registrations.rows, projects: projects.rows };
+}
+
+
 export async function createTrialRegistration(
   pool: Pool,
   cipher: DataCipher,

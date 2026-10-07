@@ -112,3 +112,9 @@ jobs:
           curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30 \
             https://app.pushgiant.ru/dashboard -o "$dashboard_html"
           grep -q "Push Giant" "$dashboard_html"
+          curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30 \
+            https://app.pushgiant.ru/test-push -o /dev/null
+          admin_html="$(mktemp)"
+          curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30 \
+            https://app.pushgiant.ru/admin -o "$admin_html"
+          grep -q "Push Giant" "$admin_html"

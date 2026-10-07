@@ -491,6 +491,11 @@ export default function DashboardPage() {
           </section>
         ) : null}
 
+        <section className="panel pathIdentity">
+          <div><p className="eyebrow">PATH-2 · Ваш сайт / приложение</p><h2>Клиентский кабинет проекта</h2><p>Здесь подключается ваш реальный домен, появляются реальные подписчики, test push проекта и рабочие кампании.</p></div>
+          <div className="pathLinks"><a href="/test-push">← Тест без своего сайта</a><a href="/admin">Owner Admin</a></div>
+        </section>
+
         <section className="panel onboarding">
           <div className="onboardingHead">
             <div>
@@ -857,6 +862,7 @@ export default function DashboardPage() {
         .eyebrow{margin:0 0 8px;text-transform:uppercase;letter-spacing:.18em;font-size:10px;color:#a98d66}
         h2{margin:0 0 18px;font-family:var(--font-display),Georgia,serif;font-weight:400;font-size:34px}
         .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+        .pathIdentity{display:flex;justify-content:space-between;gap:20px;align-items:center;background:#eef9f1;border-color:#c8dfcc}.pathIdentity h2{margin:4px 0}.pathIdentity p{margin-bottom:0}.pathLinks{display:flex;gap:8px;flex-wrap:wrap}.pathLinks a{padding:9px 11px;border-radius:6px;background:#17130f;color:#fff;font-size:11px}
         .onboarding{display:grid;gap:16px}
         .onboardingHead{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
         .onboardingHead p:not(.eyebrow){margin:0;color:#62574c}
