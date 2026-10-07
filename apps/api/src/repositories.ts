@@ -284,7 +284,7 @@ export async function recordHeartbeat(pool: Pool, payload: SubscriberHeartbeat) 
       await pool.query(
         `
           update integration_connections
-          set status = 'active', last_sync_at = now(), updated_at = now()
+          set status = 'active', last_checked_at = now(), connected_at = coalesce(connected_at, now()), updated_at = now()
           where project_id = $1 and kind in ('wordpress', 'universal_js')
         `,
         [project.id]
