@@ -269,6 +269,31 @@ export async function recordHeartbeat(pool: Pool, payload: SubscriberHeartbeat) 
   }
 
   const subscriberId = await upsertSubscriberIdentity(pool, project, payload);
+
+  if (payload.site_origin) {
+    try {
+      const heartbeatHost = new URL(payload.site_origin).host.toLowerCase();
+      await pool.query(
+        `
+          update domains
+          set status = 'verified', verified_at = coalesce(verified_at, now())
+          where project_id = $1 and lower(host) = $2 and status <> 'verified'
+        `,
+        [project.id, heartbeatHost]
+      );
+      await pool.query(
+        `
+          update integration_connections
+          set status = 'active', last_sync_at = now(), updated_at = now()
+          where project_id = $1 and kind in ('wordpress', 'universal_js')
+        `,
+        [project.id]
+      );
+    } catch {
+      // Invalid origins are rejected by the shared schema; keep this defensive.
+    }
+  }
+
   if (payload.endpoint) {
     await pool.query(
       `
