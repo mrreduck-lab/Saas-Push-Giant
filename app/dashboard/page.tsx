@@ -30,6 +30,17 @@ type SubscribersResponse = {
   subscribers?: Subscriber[];
 };
 
+type Campaign = {
+  id: string;
+  title: string;
+  status: string;
+  sent_count?: number;
+  failed_count?: number;
+  created_at?: string;
+};
+
+type CampaignsResponse = { campaigns?: Campaign[] };
+
 type TestConfig = {
   projectId: string;
   publicKey: string;
@@ -67,6 +78,10 @@ export default function DashboardPage() {
   const [pwaTestAutoOfferShown, setPwaTestAutoOfferShown] = useState(false);
   const [projectMode, setProjectMode] = useState<ProjectMode>('test');
   const [trialProject, setTrialProject] = useState<TrialProject | null>(null);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [projectTestState, setProjectTestState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
+  const [projectTestMessage, setProjectTestMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const storedProject = readStoredTrialProject();
@@ -95,9 +110,10 @@ export default function DashboardPage() {
       setError(null);
 
       try {
-        const [overviewResponse, subscribersResponse] = await Promise.all([
+        const [overviewResponse, subscribersResponse, campaignsResponse] = await Promise.all([
           fetch('/api/platform/overview', { cache: 'no-store', headers: projectHeaders }),
-          fetch('/api/platform/subscribers', { cache: 'no-store', headers: projectHeaders })
+          fetch('/api/platform/subscribers', { cache: 'no-store', headers: projectHeaders }),
+          fetch('/api/platform/campaigns', { cache: 'no-store', headers: projectHeaders })
         ]);
 
         if (!overviewResponse.ok) {
@@ -112,10 +128,14 @@ export default function DashboardPage() {
 
         const overviewData = await overviewResponse.json() as Overview;
         const subscribersData = await subscribersResponse.json() as SubscribersResponse;
+        const campaignsData = campaignsResponse.ok
+          ? await campaignsResponse.json() as CampaignsResponse
+          : { campaigns: [] };
 
         if (!ignore) {
           setOverview(overviewData);
           setSubscribers(subscribersData.subscribers ?? []);
+          setCampaigns(campaignsData.campaigns ?? []);
         }
       } catch (loadError) {
         if (!ignore) {
@@ -133,7 +153,12 @@ export default function DashboardPage() {
     return () => {
       ignore = true;
     };
-  }, [projectHeaders]);
+  }, [projectHeaders, refreshTick]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setRefreshTick((value) => value + 1), 15000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const displayModeQueries = [
@@ -269,6 +294,30 @@ export default function DashboardPage() {
     setError(null);
   }
 
+  async function sendProjectTest() {
+    if (!activeProject || activeSubscribers < 1) {
+      setProjectTestState('failed');
+      setProjectTestMessage('Сначала подключите сайт и получите хотя бы одного активного подписчика.');
+      return;
+    }
+    setProjectTestState('sending');
+    setProjectTestMessage('Отправляем тест последнему активному подписчику...');
+    const response = await fetch('/api/platform/test-active', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...projectHeaders },
+      body: JSON.stringify({ title: 'Push Giant test', body: 'Боевой push-канал проекта работает.' })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setProjectTestState('failed');
+      setProjectTestMessage(readPlatformError(data, `test_failed_${response.status}`));
+      return;
+    }
+    setProjectTestState('sent');
+    setProjectTestMessage(`Тест отправлен подписчику ${data.subscriber_id ?? ''}.`);
+    setRefreshTick((value) => value + 1);
+  }
+
   async function sendCampaign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -300,6 +349,7 @@ export default function DashboardPage() {
     setSendState('sent');
     setSendMessage(`Кампания поставлена в очередь: ${data.id ?? 'accepted'}`);
     event.currentTarget.reset();
+    window.setTimeout(() => setRefreshTick((value) => value + 1), 1200);
   }
 
   function openConsentStep() {
@@ -465,6 +515,27 @@ export default function DashboardPage() {
           </div>
         </section>
 
+        {activeProject ? (
+          <section className="panel connectionPanel">
+            <div>
+              <p className="eyebrow">CMVP-02 · Site connection</p>
+              <h2>Подключение {activeProject.siteUrl || 'сайта'}</h2>
+              <p>{overview?.site_status === 'verified'
+                ? '✓ SDK уже вышел на связь с зарегистрированного домена.'
+                : 'Установите WordPress plugin. После первого heartbeat с зарегистрированного домена статус изменится автоматически.'}</p>
+              <div className={overview?.site_status === 'verified' ? 'connectionOk' : 'connectionPending'}>
+                {overview?.site_status === 'verified' ? 'Сайт подключён' : 'Ожидаем сигнал от сайта'}
+              </div>
+              <button type="button" onClick={() => setRefreshTick((value) => value + 1)}>Проверить сейчас</button>
+            </div>
+            <div className="connectionActions">
+              <a href="/downloads/pushgiant-wordpress.zip">1. Скачать WordPress plugin</a>
+              <code>{`Project ID: ${activeProject.projectId}\nAPI URL: https://api.pushgiant.ru\nAPI key: ${activeProject.apiKey}`}</code>
+              <small>API key показывается только владельцу trial в локальном контексте кабинета. Не публикуйте его в HTML сайта.</small>
+            </div>
+          </section>
+        ) : null}
+
         <section className="panel projectMode">
           <div>
             <p className="eyebrow">Project model</p>
@@ -573,7 +644,23 @@ export default function DashboardPage() {
         </section>
 
         <section id="Подписчики" className="panel">
-          <h2>Подписчики</h2>
+          <div className="sectionHead">
+            <div>
+              <h2>Подписчики</h2>
+              <p>{activeSubscribers > 0 ? `Активных push-подписок: ${activeSubscribers}` : 'Ожидаем первую активную push-подписку с подключённого сайта.'}</p>
+            </div>
+            <button type="button" onClick={() => setRefreshTick((value) => value + 1)}>Обновить</button>
+          </div>
+          {activeProject ? (
+            <div className="projectTest">
+              <strong>CMVP-04 · Проверка боевого push-канала</strong>
+              <span>{activeSubscribers > 0 ? 'Отправим один push последнему активному подписчику.' : 'Кнопка станет доступна после первой активной подписки.'}</span>
+              <button type="button" disabled={activeSubscribers < 1 || projectTestState === 'sending'} onClick={sendProjectTest}>
+                {projectTestState === 'sending' ? 'Отправляем...' : 'Отправить test push'}
+              </button>
+              {projectTestMessage ? <small className={projectTestState === 'failed' ? 'failedText' : 'successText'}>{projectTestMessage}</small> : null}
+            </div>
+          ) : null}
           <div className="table">
             {['ID / CRM', 'Device', 'Browser', 'Permission', 'Status'].map((cell) => (
               <span className="head" key={cell}>{cell}</span>
@@ -604,6 +691,24 @@ export default function DashboardPage() {
             </button>
           </form>
         </section>
+
+        {activeProject ? (
+          <section className="panel">
+            <div className="sectionHead">
+              <div><p className="eyebrow">CMVP-05 · Delivery result</p><h2>Последние кампании</h2></div>
+              <button type="button" onClick={() => setRefreshTick((value) => value + 1)}>Обновить</button>
+            </div>
+            <div className="campaignList">
+              {campaigns.length ? campaigns.map((campaign) => (
+                <article key={campaign.id}>
+                  <strong>{campaign.title}</strong>
+                  <span>{campaign.status}</span>
+                  <small>sent {campaign.sent_count ?? 0} · failed {campaign.failed_count ?? 0}</small>
+                </article>
+              )) : <p>Кампаний пока нет. Создайте первую рассылку выше.</p>}
+            </div>
+          </section>
+        ) : null}
 
         <section id="PWA" className="panel split">
           <div>
@@ -757,6 +862,15 @@ export default function DashboardPage() {
         .onboardingSteps article a,.onboardingSteps article button{width:max-content;margin-top:auto;padding:9px 11px;border-radius:6px;background:#17130f;color:#fff;border:1px solid #17130f;font-size:12px}
         .doneStep{background:#f1f7ef;border-color:#b9d2b6}
         .currentStep{border-color:#a98d66;box-shadow:inset 0 0 0 1px rgba(169,141,102,.18)}
+        .connectionPanel{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+        .connectionActions{display:grid;gap:10px}.connectionActions code{white-space:pre-wrap;overflow-wrap:anywhere}
+        .connectionOk,.connectionPending{width:max-content;margin:12px 0;padding:8px 10px;border-radius:6px;font-size:12px;font-weight:700}
+        .connectionOk{background:#e6f3e8;color:#285634}.connectionPending{background:#fff3d8;color:#7a5715}
+        .sectionHead{display:flex;justify-content:space-between;gap:16px;align-items:center}
+        .projectTest{display:grid;gap:8px;margin:14px 0;padding:14px;border:1px solid #ded5ca;border-radius:8px}
+        .projectTest button,.sectionHead button,.connectionPanel button{width:max-content}
+        .successText{color:#285634}.failedText{color:#9d2f2f}
+        .campaignList{display:grid;gap:8px}.campaignList article{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center}
         .projectMode{display:grid;grid-template-columns:minmax(220px,.65fr) 1fr;gap:18px;align-items:start}
         .projectCards,.guideSteps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
         .projectCards{grid-template-columns:1fr 1fr}
@@ -806,7 +920,7 @@ export default function DashboardPage() {
         .consentModal p:not(.eyebrow){margin:0;color:#62574c;line-height:1.58}
         .consentActions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:22px}
         .consentActions button:first-child{background:#fffaf3;color:#17130f;border-color:rgba(21,18,15,.22)}
-        @media(max-width:880px){.dashboard{grid-template-columns:1fr}aside{position:static;height:auto}.metrics,.cards,.split,.projectMode,.projectCards,.guideSteps,.onboardingSteps{grid-template-columns:1fr}.table{grid-template-columns:1fr}.table span{border-right:0}.topline{display:grid}}
+        @media(max-width:880px){.dashboard{grid-template-columns:1fr}aside{position:static;height:auto}.metrics,.cards,.split,.projectMode,.projectCards,.guideSteps,.onboardingSteps,.connectionPanel{grid-template-columns:1fr}.table{grid-template-columns:1fr}.table span{border-right:0}.topline{display:grid}}
       `}</style>
     </main>
   );
