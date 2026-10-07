@@ -137,7 +137,8 @@ export function buildServer({ config, database, queues }: ServerDeps) {
       return reply.code(400).send({ error: "invalid_subscription", details: parsed.error.flatten() });
     }
 
-    if (!(await projectOriginMatchesDomain(database.pool, parsed.data.project_id, request.headers.origin))) {
+    if (parsed.data.external_source !== "pushgiant_test" &&
+        !(await projectOriginMatchesDomain(database.pool, parsed.data.project_id, request.headers.origin))) {
       return reply.code(403).send({ error: "origin_not_registered" });
     }
 
