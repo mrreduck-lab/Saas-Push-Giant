@@ -473,6 +473,69 @@ export async function listProjectSubscribers(
   return result.rows;
 }
 
+export async function loadLatestActiveSubscription(
+  pool: Pool,
+  apiKey: ApiKeyIdentity,
+  projectId: string
+): Promise<TestNotificationTarget | null> {
+  const project = await findActiveProjectForApiKey(pool, projectId, apiKey);
+  if (!project) return null;
+
+  const result = await pool.query<TestNotificationTarget>(
+    `
+      select
+        ps.organization_id,
+        ps.project_id,
+        ps.subscriber_id,
+        ps.id as subscription_id,
+        ps.endpoint_encrypted,
+        ps.p256dh_encrypted,
+        ps.auth_encrypted,
+        vc.public_key,
+        vc.private_key_encrypted,
+        vc.subject
+      from push_subscriptions ps
+      join vapid_credentials vc on vc.project_id = ps.project_id
+      where ps.project_id = $1 and ps.status = 'active'
+      order by ps.last_seen_at desc
+      limit 1
+    `,
+    [project.id]
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function listProjectCampaigns(
+  pool: Pool,
+  apiKey: ApiKeyIdentity,
+  projectId: string,
+  limit = 20
+) {
+  const project = await findActiveProjectForApiKey(pool, projectId, apiKey);
+  if (!project) return null;
+
+  const result = await pool.query(
+    `
+      select
+        c.id,
+        c.title,
+        c.status,
+        c.created_at,
+        c.updated_at,
+        coalesce(sum(cb.sent_count), 0)::int as sent_count,
+        coalesce(sum(cb.failed_count), 0)::int as failed_count
+      from campaigns c
+      left join campaign_batches cb on cb.campaign_id = c.id
+      where c.project_id = $1
+      group by c.id
+      order by c.created_at desc
+      limit $2
+    `,
+    [project.id, Math.min(Math.max(limit, 1), 100)]
+  );
+  return result.rows;
+}
+
 export async function createTrialRegistration(
   pool: Pool,
   cipher: DataCipher,
