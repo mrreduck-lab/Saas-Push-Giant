@@ -538,6 +538,7 @@ const PUSHGIANT_BROWSER_SDK = String.raw`
         project_id: config.projectId,
         anonymous_id: config.anonymousId,
         external_customer_id: config.externalCustomerId || undefined,
+        external_source: config.externalSource,
         permission: typeof Notification === "undefined" ? "default" : Notification.permission,
         platform: navigator.platform,
         browser: detectBrowser(),
