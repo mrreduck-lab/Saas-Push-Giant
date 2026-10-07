@@ -1,4 +1,4 @@
-import { loadPlatformEnv, platformFetch } from "../../_lib";
+import { loadPlatformEnv, platformFetch } from "../_lib";
 
 export const dynamic = "force-dynamic";
 
