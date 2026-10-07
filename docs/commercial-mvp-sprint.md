@@ -89,13 +89,23 @@ Dedicated UX/design review: walk the product as a new customer, test clarity of 
 - CMVP-04: production project can send one test notification to the latest active subscriber; the action is disabled when there is no deliverable active subscription and surfaces provider success/failure.
 - CMVP-05: campaign send remains the minimum create+queue path and the dashboard now reads back recent campaign status with sent/failed batch counters.
 - Verification and production acceptance are still pending; checkboxes above describe implementation state, not production acceptance.
+- Hardened customer-domain operation: API CORS reflects customer origins, while subscription/heartbeat/event/geo writes validate the Origin against the project's registered domain. The isolated `pushgiant_test` one-shot path remains server-mediated.
+- Production deploy smoke now checks public web, dashboard, API health/readiness and the browser SDK.
 
 ## Pilot limitations
 - First guided integration is WordPress / browser SDK.
-- Site verification requires a heartbeat from the exact host registered during trial.
+- Site verification requires a heartbeat from the exact host registered during trial; public SDK writes are rejected when the browser Origin does not match that registered host.
 - Test push targets the most recently seen active subscription; per-subscriber selection is deferred.
 - Campaign audience is the current default active-subscriber delivery path; advanced segment builder is deferred.
 - Trial credentials currently live in the browser's local trial context; full server-side account session hardening is a follow-up before broad self-serve launch.
+
+## Iteration budget
+- CMVP-01: 1 implementation iteration + production deploy.
+- CMVP-02: 8 implementation/hardening iterations so far (limit 20).
+- CMVP-03: 1 implementation iteration so far (limit 20).
+- CMVP-04: 2 implementation iterations so far (limit 20).
+- CMVP-05: 2 implementation iterations so far (limit 20).
+- CMVP-06: 2 verification/hardening iterations so far (limit 20).
 
 ## Logging rule
 
