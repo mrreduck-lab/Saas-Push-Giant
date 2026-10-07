@@ -479,7 +479,8 @@ const PUSHGIANT_BROWSER_SDK = String.raw`
         os: detectOs(),
         user_agent: navigator.userAgent,
         locale: navigator.language,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        site_origin: window.location.origin
       })
     });
 
