@@ -93,6 +93,22 @@ async function findActiveProjectForApiKey(
   return result.rows[0] ?? null;
 }
 
+
+export async function projectOriginMatchesDomain(pool: Pool, projectId: string, origin: string | undefined) {
+  if (!origin) return false;
+  let host: string;
+  try {
+    host = new URL(origin).host.toLowerCase();
+  } catch {
+    return false;
+  }
+  const result = await pool.query(
+    `select 1 from domains where project_id = $1 and lower(host) = $2 limit 1`,
+    [projectId, host]
+  );
+  return result.rowCount === 1;
+}
+
 export function hashEndpoint(endpoint: string): string {
   return hashSecret(endpoint);
 }
