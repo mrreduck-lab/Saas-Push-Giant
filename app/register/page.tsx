@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 type TrialState =
   | { status: "idle" }
@@ -19,6 +19,14 @@ const TRIAL_PROJECT_STORAGE_KEY = "pushgiant.trialProject.v1";
 
 export default function RegisterPage() {
   const [state, setState] = useState<TrialState>({ status: "idle" });
+  const [siteUrl, setSiteUrl] = useState("");
+  const [flow, setFlow] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setSiteUrl(params.get("siteUrl") ?? "");
+    setFlow(params.get("flow") ?? "");
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,25 +57,39 @@ export default function RegisterPage() {
       siteUrl: String(form.get("siteUrl") ?? "")
     });
     setState({ status: "success", result });
-    event.currentTarget.reset();
   }
+
+  const appBuilderFlow = flow === "app-builder";
 
   return (
     <main className="register">
       <a className="brand" href="/">Push Giant</a>
       <section>
         <div>
-          <p>Trial registration</p>
-          <h1>Создать проект и получить API key</h1>
-          <span>После отправки Core API создаст организацию, пользователя, проект, PWA-конфиг, VAPID и trial-ключ на 14 дней или 100 push.</span>
+          <p>{appBuilderFlow ? "App Builder · early access" : "Trial registration"}</p>
+          <h1>{appBuilderFlow ? "Начните с адреса вашего сайта" : "Создать проект и получить API key"}</h1>
+          <span>
+            {appBuilderFlow
+              ? "Создадим проект Push Giant для вашего сайта. PWA доступен уже сейчас; iOS и Android App Builder подключаются в раннем доступе по мере готовности native-сборок."
+              : "После отправки Core API создаст организацию, пользователя, проект, PWA-конфиг, VAPID и trial-ключ на 14 дней или 100 push."}
+          </span>
         </div>
         <form onSubmit={submit}>
           <input name="name" placeholder="Имя" required />
           <input name="email" type="email" placeholder="Email" required />
           <input name="company" placeholder="Компания" required />
-          <input name="siteUrl" type="url" placeholder="https://example.com" required />
+          <input
+            name="siteUrl"
+            type="url"
+            placeholder="https://example.com"
+            required
+            value={siteUrl}
+            onChange={(event) => setSiteUrl(event.target.value)}
+          />
           <input name="password" type="password" placeholder="Пароль" required minLength={8} />
-          <button disabled={state.status === "loading"}>{state.status === "loading" ? "Создаём..." : "Начать trial"}</button>
+          <button disabled={state.status === "loading"}>
+            {state.status === "loading" ? "Создаём..." : appBuilderFlow ? "Создать проект" : "Начать trial"}
+          </button>
         </form>
       </section>
 
