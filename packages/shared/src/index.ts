@@ -67,7 +67,8 @@ export const subscriberHeartbeatSchema = z.object({
   os: z.string().optional(),
   user_agent: z.string().optional(),
   locale: z.string().optional(),
-  timezone: z.string().optional()
+  timezone: z.string().optional(),
+  site_origin: z.string().url().optional()
 });
 
 export type SubscriberHeartbeat = z.infer<typeof subscriberHeartbeatSchema>;
