@@ -103,4 +103,12 @@ jobs:
           curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30 \
             "https://pushgiant.ru${css_path}" -o /dev/null
           curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30 \
+            https://api.pushgiant.ru/healthz -o /dev/null
+          curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30 \
             https://api.pushgiant.ru/readyz -o /dev/null
+          curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30 \
+            https://api.pushgiant.ru/sdk/pushgiant.js -o /dev/null
+          dashboard_html="$(mktemp)"
+          curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30 \
+            https://app.pushgiant.ru/dashboard -o "$dashboard_html"
+          grep -q "Push Giant" "$dashboard_html"
