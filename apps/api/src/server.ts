@@ -22,6 +22,7 @@ import {
   createCampaign,
   createTrialRegistration,
   getProjectOverview,
+  getOwnerAdminOverview,
   listProjectSubscribers,
   listProjectCampaigns,
   loadLatestActiveSubscription,
@@ -59,6 +60,14 @@ export function buildServer({ config, database, queues }: ServerDeps) {
     // the request Origin matches the domain registered for the project.
     origin: true,
     credentials: true
+  });
+
+  app.get("/v1/admin/overview", async (request, reply) => {
+    const token = request.headers["x-admin-token"]?.toString();
+    if (!config.adminToken || token !== config.adminToken) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+    return getOwnerAdminOverview(database.pool);
   });
 
   app.get("/healthz", async () => ({ status: "ok" }));
