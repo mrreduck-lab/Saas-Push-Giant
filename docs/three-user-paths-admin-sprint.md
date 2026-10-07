@@ -31,10 +31,10 @@ Implement the three product journeys approved in the product diagram.
 - [x] Protect owner API with admin secret/token.
 
 ## Acceptance
-- [x] CI passes.
-- [x] Production deploy passes.
-- [x] Production smoke covers /admin and the test path in addition to existing customer dashboard/API/SDK checks.
-- [x] Provide production links for manual acceptance.
+- [ ] CI passes.
+- [ ] Production deploy passes.
+- [ ] Production smoke covers /admin and the test path in addition to existing customer dashboard/API/SDK checks.
+- [ ] Provide production links for manual acceptance.
 
 ## Work log
 ### 2026-10-08 · implementation
